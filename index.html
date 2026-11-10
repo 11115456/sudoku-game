@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>20關數獨遊戲</title>
+  <title>20關數獨闖關遊戲</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,40 +15,47 @@
       <input type="text" id="username" placeholder="請輸入帳號名">
       <button onclick="login()">登入 / 載入進度</button>
     </div>
-    <p id="user-info">目前狀態：未登入（進度不會儲存）</p>
+    <p id="user-info">目前狀態：未登入（進度將不會儲存）</p>
 
-    <!-- 關卡與教學 -->
-    <div class="level-bar">
-      <button onclick="prevLevel()">◀ 上一關</button>
-      <span id="level-title">第 1 關 (教學關)</span>
-      <button onclick="nextLevel()">下一關 ▶</button>
-    </div>
-    
-    <div id="guide-text" class="guide">
-      💡 <b>教學提示</b>：數獨規則為每行、每列與每個 3x3 小格內的數字 1~9 不能重複！
+    <!-- 1. 關卡目錄頁面 -->
+    <div id="menu-view">
+      <h3>🎯 選擇關卡</h3>
+      <div id="level-menu" class="level-grid"></div>
     </div>
 
-    <!-- 9x9 數獨棋盤 -->
-    <div id="grid" class="sudoku-grid"></div>
+    <!-- 2. 數獨遊戲主頁面 (預設隱藏) -->
+    <div id="game-view" style="display: none;">
+      <div class="level-bar">
+        <button onclick="backToMenu()">◀ 返回目錄</button>
+        <span id="level-title">第 1 關</span>
+        <span></span>
+      </div>
+      
+      <div id="guide-text" class="guide">
+        💡 <b>提示</b>：點選數字再點格子可填寫草稿（淺色），再點一次確認填入（深色）。
+      </div>
 
-    <!-- 底部數字選擇鍵盤 -->
-    <div class="number-pad">
-      <button class="num-btn" onclick="selectNumber(1)">1</button>
-      <button class="num-btn" onclick="selectNumber(2)">2</button>
-      <button class="num-btn" onclick="selectNumber(3)">3</button>
-      <button class="num-btn" onclick="selectNumber(4)">4</button>
-      <button class="num-btn" onclick="selectNumber(5)">5</button>
-      <button class="num-btn" onclick="selectNumber(6)">6</button>
-      <button class="num-btn" onclick="selectNumber(7)">7</button>
-      <button class="num-btn" onclick="selectNumber(8)">8</button>
-      <button class="num-btn" onclick="selectNumber(9)">9</button>
-      <button class="num-btn erase-btn" onclick="selectNumber(0)">橡皮擦</button>
-    </div>
+      <!-- 9x9 數獨棋盤 -->
+      <div id="grid" class="sudoku-grid"></div>
 
+      <!-- 數字鍵盤 -->
+      <div class="number-pad">
+        <button class="num-btn" onclick="selectNumber(1)">1</button>
+        <button class="num-btn" onclick="selectNumber(2)">2</button>
+        <button class="num-btn" onclick="selectNumber(3)">3</button>
+        <button class="num-btn" onclick="selectNumber(4)">4</button>
+        <button class="num-btn" onclick="selectNumber(5)">5</button>
+        <button class="num-btn" onclick="selectNumber(6)">6</button>
+        <button class="num-btn" onclick="selectNumber(7)">7</button>
+        <button class="num-btn" onclick="selectNumber(8)">8</button>
+        <button class="num-btn" onclick="selectNumber(9)">9</button>
+        <button class="num-btn erase-btn" onclick="selectNumber(0)">橡皮擦</button>
+      </div>
 
-    <div class="actions">
-      <button onclick="checkAnswer()">驗證答案</button>
-      <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
+      <div class="actions">
+        <button onclick="checkAnswer()">提交並驗證答案</button>
+        <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
+      </div>
     </div>
   </div>
 
