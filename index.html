@@ -3,22 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>20關數獨闖關遊戲</title>
+  <title>20關數獨挑戰</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <h1>🧩 20 關數獨挑戰</h1>
-    
-    <!-- 帳號登入區域 -->
-    <div id="auth-box">
-      <input type="text" id="username" placeholder="請輸入帳號名">
-      <button onclick="login()">登入 / 載入進度</button>
-    </div>
-    <p id="user-info">目前狀態：未登入（進度將不會儲存）</p>
 
     <!-- 1. 關卡目錄頁面 -->
     <div id="menu-view">
+      <!-- 帳號登入狀態欄 -->
+      <div class="user-bar">
+        <button onclick="openAuthModal()" class="auth-btn">🔑 登入 / 註冊</button>
+        <span id="user-status" class="status-badge offline">🔴 未登入 (進度不會儲存)</span>
+      </div>
+
       <h3>🎯 選擇關卡</h3>
       <div id="level-menu" class="level-grid"></div>
     </div>
@@ -38,7 +37,7 @@
       <!-- 9x9 數獨棋盤 -->
       <div id="grid" class="sudoku-grid"></div>
 
-            <!-- 數字鍵盤 -->
+      <!-- 數字鍵盤 -->
       <div class="number-pad">
         <button class="num-btn" onclick="selectNumber(1, this)">1</button>
         <button class="num-btn" onclick="selectNumber(2, this)">2</button>
@@ -52,12 +51,37 @@
         <button class="num-btn erase-btn" onclick="selectNumber(0, this)">橡皮擦</button>
       </div>
 
-
-
-      
       <div class="actions">
         <button onclick="checkAnswer()">提交並驗證答案</button>
         <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 登入 / 註冊 彈窗 (Modal) -->
+  <div id="auth-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeAuthModal()">&times;</span>
+      
+      <!-- 分頁標籤 -->
+      <div class="tab-header">
+        <button id="tab-login-btn" class="tab-btn active" onclick="switchTab('login')">登入</button>
+        <button id="tab-register-btn" class="tab-btn" onclick="switchTab('register')">註冊帳號</button>
+      </div>
+
+      <!-- 登入表單 -->
+      <div id="login-form" class="auth-form">
+        <input type="text" id="login-user" placeholder="請輸入帳號">
+        <input type="password" id="login-pass" placeholder="請輸入密碼">
+        <button onclick="handleLogin()" class="submit-btn">登入</button>
+      </div>
+
+      <!-- 註冊表單 -->
+      <div id="register-form" class="auth-form" style="display: none;">
+        <input type="text" id="reg-user" placeholder="請設定帳號">
+        <input type="password" id="reg-pass1" placeholder="請設定密碼">
+        <input type="password" id="reg-pass2" placeholder="請再次輸入密碼">
+        <button onclick="handleRegister()" class="submit-btn reg">完成註冊並登入</button>
       </div>
     </div>
   </div>
