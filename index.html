@@ -12,7 +12,6 @@
 
     <!-- 1. 關卡目錄頁面 -->
     <div id="menu-view">
-      <!-- 帳號登入狀態欄 -->
       <div class="user-bar">
         <button id="auth-open-btn" class="auth-btn">🔑 登入 / 註冊</button>
         <span id="user-status" class="status-badge offline">🔴 未登入 (進度不會儲存)</span>
@@ -22,12 +21,12 @@
       <div id="level-menu" class="level-grid"></div>
     </div>
 
-    <!-- 2. 數獨遊戲主頁面 (預設隱藏) -->
+    <!-- 2. 數獨遊戲主頁面 -->
     <div id="game-view" style="display: none;">
       <div class="level-bar">
         <button onclick="backToMenu()">◀ 返回目錄</button>
         <span id="level-title">第 1 關</span>
-        <span></span>
+        <span id="timer-display" class="timer">⏱️ 00:00:00</span>
       </div>
       
       <div id="guide-text" class="guide">
@@ -58,25 +57,22 @@
     </div>
   </div>
 
-  <!-- 登入 / 註冊 彈窗 (Modal - 獨立放在 body 頂層) -->
+  <!-- 登入 / 註冊 彈窗 (Modal) -->
   <div id="auth-modal" class="modal" style="display: none;">
     <div class="modal-content">
       <span class="close-btn" id="auth-close-btn">&times;</span>
       
-      <!-- 分頁標籤 -->
       <div class="tab-header">
         <button id="tab-login-btn" class="tab-btn active">登入</button>
         <button id="tab-register-btn" class="tab-btn">註冊帳號</button>
       </div>
 
-      <!-- 登入表單 -->
       <div id="login-form" class="auth-form">
         <input type="text" id="login-user" placeholder="請輸入帳號">
         <input type="password" id="login-pass" placeholder="請輸入密碼">
         <button onclick="handleLogin()" class="submit-btn">登入</button>
       </div>
 
-      <!-- 註冊表單 -->
       <div id="register-form" class="auth-form" style="display: none;">
         <input type="text" id="reg-user" placeholder="請設定帳號">
         <input type="password" id="reg-pass1" placeholder="請設定密碼">
