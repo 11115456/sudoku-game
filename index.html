@@ -9,7 +9,7 @@
 <body>
   <div class="container">
     
-    <!-- 1. 主首頁：遊戲大廳 -->
+    <!-- 遊戲大廳主頁 -->
     <div id="lobby-view">
       <h1>🎮 綜合遊戲樂園</h1>
       <div class="user-bar">
@@ -19,55 +19,14 @@
 
       <h3>🔥 選擇遊戲</h3>
       <div class="game-hall-grid">
-        <!-- 改為真實按鈕元件 -->
-        <button id="sudoku-game-btn" class="game-card-btn">
+        <!-- 點擊直接跳轉至子資料夾的數獨 -->
+        <a href="./sudoku/index.html" class="game-card-btn">
           <div class="game-icon">🧩</div>
           <strong>20 關數獨挑戰</strong>
           <p>邏輯推理與經典數獨關卡</p>
-        </button>
-      </div>
-    </div>
+        </a>
 
-    <!-- 2. 數獨關卡目錄頁 -->
-    <div id="menu-view" style="display: none;">
-      <div class="top-nav">
-        <button id="back-to-lobby-btn" class="nav-back-btn">◀ 返回遊戲大廳</button>
-      </div>
-      <h2>🧩 20 關數獨挑戰</h2>
-      <h3>🎯 選擇關卡</h3>
-      <div id="level-menu" class="level-grid"></div>
-    </div>
-
-    <!-- 3. 數獨遊戲主頁面 -->
-    <div id="game-view" style="display: none;">
-      <div class="level-bar">
-        <button onclick="backToMenu()">◀ 返回關卡目錄</button>
-        <span id="level-title">第 1 關</span>
-        <span id="timer-display" class="timer">⏱️ 00:00:00</span>
-      </div>
-      
-      <div id="guide-text" class="guide">
-        💡 <b>提示</b>：點選數字再點格子可填寫草稿（淺色），再點一次確認填入（深色）。
-      </div>
-
-      <div id="grid" class="sudoku-grid"></div>
-
-      <div class="number-pad">
-        <button class="num-btn" onclick="selectNumber(1, this)">1</button>
-        <button class="num-btn" onclick="selectNumber(2, this)">2</button>
-        <button class="num-btn" onclick="selectNumber(3, this)">3</button>
-        <button class="num-btn" onclick="selectNumber(4, this)">4</button>
-        <button class="num-btn" onclick="selectNumber(5, this)">5</button>
-        <button class="num-btn" onclick="selectNumber(6, this)">6</button>
-        <button class="num-btn" onclick="selectNumber(7, this)">7</button>
-        <button class="num-btn" onclick="selectNumber(8, this)">8</button>
-        <button class="num-btn" onclick="selectNumber(9, this)">9</button>
-        <button class="num-btn erase-btn" onclick="selectNumber(0, this)">橡皮擦</button>
-      </div>
-
-      <div class="actions">
-        <button onclick="checkAnswer()">提交並驗證答案</button>
-        <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
+        <!-- 未來新增遊戲直接在這裡加 <a> 標籤即可 -->
       </div>
     </div>
 
