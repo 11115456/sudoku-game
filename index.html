@@ -38,20 +38,23 @@
       <!-- 9x9 數獨棋盤 -->
       <div id="grid" class="sudoku-grid"></div>
 
-      <!-- 數字鍵盤 -->
+            <!-- 數字鍵盤 -->
       <div class="number-pad">
-        <button class="num-btn" onclick="selectNumber(1)">1</button>
-        <button class="num-btn" onclick="selectNumber(2)">2</button>
-        <button class="num-btn" onclick="selectNumber(3)">3</button>
-        <button class="num-btn" onclick="selectNumber(4)">4</button>
-        <button class="num-btn" onclick="selectNumber(5)">5</button>
-        <button class="num-btn" onclick="selectNumber(6)">6</button>
-        <button class="num-btn" onclick="selectNumber(7)">7</button>
-        <button class="num-btn" onclick="selectNumber(8)">8</button>
-        <button class="num-btn" onclick="selectNumber(9)">9</button>
-        <button class="num-btn erase-btn" onclick="selectNumber(0)">橡皮擦</button>
+        <button class="num-btn" onclick="selectNumber(1, this)">1</button>
+        <button class="num-btn" onclick="selectNumber(2, this)">2</button>
+        <button class="num-btn" onclick="selectNumber(3, this)">3</button>
+        <button class="num-btn" onclick="selectNumber(4, this)">4</button>
+        <button class="num-btn" onclick="selectNumber(5, this)">5</button>
+        <button class="num-btn" onclick="selectNumber(6, this)">6</button>
+        <button class="num-btn" onclick="selectNumber(7, this)">7</button>
+        <button class="num-btn" onclick="selectNumber(8, this)">8</button>
+        <button class="num-btn" onclick="selectNumber(9, this)">9</button>
+        <button class="num-btn erase-btn" onclick="selectNumber(0, this)">橡皮擦</button>
       </div>
 
+
+
+      
       <div class="actions">
         <button onclick="checkAnswer()">提交並驗證答案</button>
         <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
