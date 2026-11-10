@@ -26,24 +26,25 @@ const levels = [
 ];
 
 let passedLevels = new Array(20).fill(false);
-let levelTimes = new Array(20).fill(null); // 儲存各關卡的最佳通關秒數
+let levelTimes = new Array(20).fill(null);
 
 let currentLevelIndex = 0;
 let currentUser = "";
 let selectedNum = null;
 
-// 計時器變數
+// 使用真實時間戳（Timestamp）抗老化與抗內嵌瀏覽器凍結
+let startTime = null;
 let timerInterval = null;
-let secondsElapsed = 0;
 
 function startTimer() {
   stopTimer();
-  secondsElapsed = 0;
+  startTime = Date.now();
   updateTimerUI();
+  
+  // 每 500ms 比對一次真實時間差，100% 準確跳秒
   timerInterval = setInterval(() => {
-    secondsElapsed++;
     updateTimerUI();
-  }, 1000);
+  }, 500);
 }
 
 function stopTimer() {
@@ -53,10 +54,15 @@ function stopTimer() {
   }
 }
 
+function getElapsedSeconds() {
+  if (!startTime) return 0;
+  return Math.floor((Date.now() - startTime) / 1000);
+}
+
 function updateTimerUI() {
   const timerElem = document.getElementById('timer-display');
   if (timerElem) {
-    timerElem.innerText = `⏱️ ${formatSeconds(secondsElapsed)}`;
+    timerElem.innerText = `⏱️ ${formatSeconds(getElapsedSeconds())}`;
   }
 }
 
@@ -68,7 +74,6 @@ function formatSeconds(totalSec) {
   return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
 }
 
-// 格式化為繁體中文顯示 (如：1小時2分30秒)
 function formatTimeChinese(totalSec) {
   if (!totalSec && totalSec !== 0) return "";
   const hrs = Math.floor(totalSec / 3600);
@@ -124,11 +129,10 @@ function startLevel(index) {
   document.getElementById('menu-view').style.display = 'none';
   document.getElementById('game-view').style.display = 'block';
   loadGrid(index);
-  startTimer(); // 開始計時
 }
 
 function backToMenu() {
-  stopTimer(); // 停止計時
+  stopTimer();
   document.getElementById('game-view').style.display = 'none';
   document.getElementById('menu-view').style.display = 'block';
   renderMenu();
@@ -170,6 +174,7 @@ function loadGrid(index) {
     }
   }
   checkCompletedGroups();
+  startTimer(); // 載入棋盤時強制啟動計時器
 }
 
 function selectNumber(num, btnElement) {
@@ -286,18 +291,17 @@ function checkAnswer() {
   const correctSolution = levelObj ? levelObj.solution : null;
 
   if (correctSolution && currentAnswers === correctSolution) {
-    stopTimer(); // 停止計時
-    
+    const finalSec = getElapsedSeconds();
+    stopTimer();
+
     passedLevels[currentLevelIndex] = true;
 
-    // 紀錄最佳時間（若無紀錄或時間更短則更新）
-    const currentTime = secondsElapsed;
     const oldTime = levelTimes[currentLevelIndex];
-    if (oldTime === null || oldTime === undefined || currentTime < oldTime) {
-      levelTimes[currentLevelIndex] = currentTime;
+    if (oldTime === null || oldTime === undefined || finalSec < oldTime) {
+      levelTimes[currentLevelIndex] = finalSec;
     }
 
-    const timeStr = formatTimeChinese(currentTime);
+    const timeStr = formatTimeChinese(finalSec);
     alert(`🎉 恭喜通過第 ${currentLevelIndex + 1} 關！\n⏱️ 本次耗時：${timeStr}\n下一關已成功解鎖！`);
     
     saveProgress();
