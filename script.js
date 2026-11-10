@@ -1,94 +1,171 @@
+// 已自動幫你帶入你的專屬 Render 網址！
+const RENDER_URL = "https://sudoku-game-zjff.onrender.com";
+
+// 20 關盤面數據與答案數據 (目前先放測試關卡，可依此類推延伸)
 const levels = [
-  "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
-  "000260701680070090190004500820100040004602900050003028009300074040050036703018000",
+  // 第 1 關 (教學關)
+  {
+    puzzle: "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+    solution: "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+  },
+  // 第 2 關
+  {
+    puzzle: "000260701680070090190004500820100040004602900050003028009300074040050036703018000",
+    solution: "435269781682571493197834526826195347374682915951473628519326874248759136763918254"
+  }
 ];
 
-let currentLevel = 0;
+// 初始化 20 關的通關狀態：false 代表未通過
+let passedLevels = new Array(20).fill(false);
+let currentLevelIndex = 0;
 let currentUser = "";
-let selectedNum = null; // 當前選中的數字
-const RENDER_URL = "https://sudoku-game-zjff.onrender.com"; // 請保持你原本的 Render 網址
+let selectedNum = null;
 
-const grid = document.getElementById('grid');
+// 1. 渲染目錄選單
+function renderMenu() {
+  const menuContainer = document.getElementById('level-menu');
+  menuContainer.innerHTML = "";
 
-// 選擇數字按鈕
-function selectNumber(num) {
-  selectedNum = num;
-  document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('selected'));
-  event.target.classList.add('selected');
+  for (let i = 0; i < 20; i++) {
+    const card = document.createElement('div');
+    // 解鎖規則：第 1 關預設開啟，或是前一關已經通過才解鎖
+    const isUnlocked = (i === 0) || passedLevels[i - 1];
+    const isPassed = passedLevels[i];
+
+    card.className = `level-card ${isUnlocked ? 'unlocked' : 'locked'}`;
+
+    if (isUnlocked) {
+      card.onclick = () => startLevel(i);
+      card.innerHTML = `
+        <strong>第 ${i + 1} 關</strong>
+        <span class="badge ${isPassed ? 'passed' : 'failed'}">
+          ${isPassed ? '✅ 已通過' : '❌ 未通過'}
+        </span>
+      `;
+    } else {
+      card.innerHTML = `
+        <strong>第 ${i + 1} 關</strong>
+        <span class="badge lock">🔒 鎖定中</span>
+      `;
+    }
+    menuContainer.appendChild(card);
+  }
 }
 
-// 載入盤面
-function loadLevel(levelIndex) {
+// 2. 進入特定關卡
+function startLevel(index) {
+  currentLevelIndex = index;
+  document.getElementById('menu-view').style.display = 'none';
+  document.getElementById('game-view').style.display = 'block';
+  loadGrid(index);
+}
+
+// 3. 返回目錄
+function backToMenu() {
+  document.getElementById('game-view').style.display = 'none';
+  document.getElementById('menu-view').style.display = 'block';
+  renderMenu();
+}
+
+// 4. 載入數獨棋盤
+function loadGrid(index) {
+  const grid = document.getElementById('grid');
   grid.innerHTML = "";
-  const data = levels[levelIndex] || levels[0];
-  document.getElementById('level-title').innerText = `第 ${levelIndex + 1} 關 ${levelIndex === 0 ? '(教學關)' : ''}`;
+  selectedNum = null;
+  document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('selected'));
   
+  const levelData = levels[index] ? levels[index].puzzle : levels[0].puzzle;
+  document.getElementById('level-title').innerText = `第 ${index + 1} 關 ${index === 0 ? '(教學關)' : ''}`;
+
   for (let i = 0; i < 81; i++) {
     const cell = document.createElement('div');
     cell.classList.add('cell');
-    
-    if (data[i] !== '0') {
-      cell.innerText = data[i];
+    cell.dataset.index = i;
+
+    if (levelData[i] !== '0') {
+      cell.innerText = levelData[i];
       cell.classList.add('fixed');
     } else {
-      // 點擊格子的雙次邏輯
       cell.onclick = () => handleCellClick(cell);
     }
     grid.appendChild(cell);
   }
 }
 
-function handleCellClick(cell) {
-  if (selectedNum === null) return alert("請先在下方選擇一個數字！");
+// 選擇數字
+function selectNumber(num) {
+  selectedNum = num;
+  document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('selected'));
+  event.target.classList.add('selected');
+}
 
-  // 如果選橡皮擦 (0)
+// 草稿 -> 確定 點擊邏輯
+function handleCellClick(cell) {
+  if (selectedNum === null) return alert("請先在下方選擇數字！");
+
   if (selectedNum === 0) {
     cell.innerText = "";
     cell.className = "cell";
     return;
   }
 
-  // 狀態判定：
-  // 1. 如果格子是空的，或者當前數字不等於選中的數字 -> 顯示「淺淺的預覽數字 (draft)」
   if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') || cell.innerText != selectedNum) {
     cell.innerText = selectedNum;
     cell.className = "cell draft";
-  } 
-  // 2. 如果再點一次同一個數字 -> 轉為「正式填入數字 (confirmed)」
-  else if (cell.classList.contains('draft')) {
+  } else if (cell.classList.contains('draft')) {
     cell.className = "cell confirmed";
   }
 }
 
-function nextLevel() {
-  if (currentLevel < 19) { currentLevel++; loadLevel(currentLevel); }
-}
-function prevLevel() {
-  if (currentLevel > 0) { currentLevel--; loadLevel(currentLevel); }
+// 5. 驗證答案與通關判定
+function checkAnswer() {
+  const cells = document.querySelectorAll('.sudoku-grid .cell');
+  let currentAnswers = "";
+  
+  cells.forEach(cell => {
+    currentAnswers += cell.innerText || "0";
+  });
+
+  const correctSolution = levels[currentLevelIndex] ? levels[currentLevelIndex].solution : null;
+
+  if (correctSolution && currentAnswers === correctSolution) {
+    passedLevels[currentLevelIndex] = true;
+    alert(`🎉 恭喜通過第 ${currentLevelIndex + 1} 關！下一關已成功解鎖！`);
+    saveProgress();
+    backToMenu();
+  } else {
+    alert("❌ 答案有誤或尚未填滿，請再檢查一下喔！");
+  }
 }
 
+// 帳號登入與雲端儲存
 function login() {
   const user = document.getElementById('username').value;
   if (!user) return alert("請輸入帳號名稱");
   currentUser = user;
   document.getElementById('user-info').innerText = `目前登入帳號：${currentUser}`;
-  alert(`歡迎回來，${currentUser}！`);
+  
+  // 嘗試從雲端抓取該帳號進度
+  fetch(`${RENDER_URL}/api/load/${currentUser}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.passedLevels) {
+        passedLevels = data.passedLevels;
+      }
+      renderMenu();
+      alert(`歡迎回來 ${currentUser}！進度已同步。`);
+    })
+    .catch(() => renderMenu());
 }
 
 function saveProgress() {
-  if (!currentUser) return alert("請先登入帳號！");
+  if (!currentUser) return;
   fetch(`${RENDER_URL}/api/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: currentUser, level: currentLevel })
-  })
-  .then(res => res.json())
-  .then(data => alert("☁ 進度成功儲存至雲端！"))
-  .catch(err => alert("進度已暫存於本機 (Render連線中)"));
+    body: JSON.stringify({ username: currentUser, passedLevels })
+  }).catch(err => console.log(err));
 }
 
-function checkAnswer() {
-  alert("答案驗證中...格式正確！");
-}
-
-loadLevel(0);
+// 開局先初始化目錄
+renderMenu();
