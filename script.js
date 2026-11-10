@@ -32,16 +32,26 @@ let currentLevelIndex = 0;
 let currentUser = "";
 let selectedNum = null;
 
-// 使用真實時間戳（Timestamp）抗老化與抗內嵌瀏覽器凍結
 let startTime = null;
 let timerInterval = null;
+
+// 導覽切換函數
+function enterSudoku() {
+  document.getElementById('lobby-view').style.display = 'none';
+  document.getElementById('menu-view').style.display = 'block';
+  renderMenu();
+}
+
+function backToLobby() {
+  document.getElementById('menu-view').style.display = 'none';
+  document.getElementById('lobby-view').style.display = 'block';
+}
 
 function startTimer() {
   stopTimer();
   startTime = Date.now();
   updateTimerUI();
   
-  // 每 500ms 比對一次真實時間差，100% 準確跳秒
   timerInterval = setInterval(() => {
     updateTimerUI();
   }, 500);
@@ -174,7 +184,7 @@ function loadGrid(index) {
     }
   }
   checkCompletedGroups();
-  startTimer(); // 載入棋盤時強制啟動計時器
+  startTimer();
 }
 
 function selectNumber(num, btnElement) {
@@ -334,7 +344,6 @@ function handleLogin() {
       levelTimes = data.levelTimes || new Array(20).fill(null);
       updateUserStatusUI();
       document.getElementById('auth-modal').style.display = 'none';
-      renderMenu();
       alert(`🎉 登入成功！歡迎回來，${currentUser}`);
     }
   })
@@ -364,7 +373,6 @@ function handleRegister() {
       levelTimes = new Array(20).fill(null);
       updateUserStatusUI();
       document.getElementById('auth-modal').style.display = 'none';
-      renderMenu();
       alert(`🎉 註冊成功並已自動登入！歡迎，${currentUser}`);
     }
   })
@@ -392,8 +400,6 @@ function saveProgress() {
 }
 
 window.onload = function() {
-  renderMenu();
-
   const openBtn = document.getElementById('auth-open-btn');
   const closeBtn = document.getElementById('auth-close-btn');
   const modal = document.getElementById('auth-modal');
