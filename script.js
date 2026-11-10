@@ -1,7 +1,7 @@
 // 您的專屬 Render 後端網址
 const RENDER_URL = "https://sudoku-game-zjff.onrender.com";
 
-// 完整 20 關數獨題庫 (保證語法完全正確)
+// 完整 20 關數獨題庫
 const levels = [
   { puzzle: "530070000600195000098000060800060003400803001700020006060000280000419005000080079", solution: "534678912672195348198342567859761423426853791713924856961537284287419635345286179" },
   { puzzle: "000260701680070090190004500820100040004602900050003028009300074040050036703018000", solution: "435269781682571493197834526826195347374682915951473628519326874248759136763918254" },
@@ -209,36 +209,7 @@ function checkAnswer() {
   }
 }
 
-// ---------------- 彈窗與帳號管理邏輯 ----------------
-
-function openAuthModal() {
-  const modal = document.getElementById('auth-modal');
-  if (modal) modal.style.display = 'flex';
-}
-
-function closeAuthModal() {
-  const modal = document.getElementById('auth-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function switchTab(type) {
-  const loginForm = document.getElementById('login-form');
-  const regForm = document.getElementById('register-form');
-  const loginBtn = document.getElementById('tab-login-btn');
-  const regBtn = document.getElementById('tab-register-btn');
-
-  if (type === 'login') {
-    loginForm.style.display = 'flex';
-    regForm.style.display = 'none';
-    loginBtn.classList.add('active');
-    regBtn.classList.remove('active');
-  } else {
-    loginForm.style.display = 'none';
-    regForm.style.display = 'flex';
-    regBtn.classList.add('active');
-    loginBtn.classList.remove('active');
-  }
-}
+// ---------------- 彈窗與事件綁定 ----------------
 
 function handleLogin() {
   const user = document.getElementById('login-user').value.trim();
@@ -259,7 +230,7 @@ function handleLogin() {
       currentUser = user;
       passedLevels = data.passedLevels || new Array(20).fill(false);
       updateUserStatusUI();
-      closeAuthModal();
+      document.getElementById('auth-modal').style.display = 'none';
       renderMenu();
       alert(`🎉 登入成功！歡迎回來，${currentUser}`);
     }
@@ -288,7 +259,7 @@ function handleRegister() {
       currentUser = user;
       passedLevels = new Array(20).fill(false);
       updateUserStatusUI();
-      closeAuthModal();
+      document.getElementById('auth-modal').style.display = 'none';
       renderMenu();
       alert(`🎉 註冊成功並已自動登入！歡迎，${currentUser}`);
     }
@@ -316,6 +287,44 @@ function saveProgress() {
   }).catch(err => console.log(err));
 }
 
+// 初始化頁面與綁定彈窗事件
 window.onload = function() {
   renderMenu();
+
+  // 強化彈窗開啟按鈕綁定
+  const openBtn = document.getElementById('auth-open-btn');
+  const closeBtn = document.getElementById('auth-close-btn');
+  const modal = document.getElementById('auth-modal');
+  const tabLogin = document.getElementById('tab-login-btn');
+  const tabReg = document.getElementById('tab-register-btn');
+  const loginForm = document.getElementById('login-form');
+  const regForm = document.getElementById('register-form');
+
+  if (openBtn && modal) {
+    openBtn.onclick = function() {
+      modal.style.display = 'flex';
+    };
+  }
+
+  if (closeBtn && modal) {
+    closeBtn.onclick = function() {
+      modal.style.display = 'none';
+    };
+  }
+
+  if (tabLogin && tabReg) {
+    tabLogin.onclick = function() {
+      loginForm.style.display = 'flex';
+      regForm.style.display = 'none';
+      tabLogin.classList.add('active');
+      tabReg.classList.remove('active');
+    };
+
+    tabReg.onclick = function() {
+      loginForm.style.display = 'none';
+      regForm.style.display = 'flex';
+      tabReg.classList.add('active');
+      tabLogin.classList.remove('active');
+    };
+  }
 };
