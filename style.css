@@ -114,3 +114,26 @@ button { padding: 8px 12px; background: #4CAF50; color: white; border: none; bor
 .auth-form input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
 .submit-btn { background: #2196F3; color: white; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 5px; }
 .submit-btn.reg { background: #4CAF50; }
+
+/* 1. 填錯時的紅色樣式與抖動動畫 */
+.sudoku-grid div.cell.wrong {
+  color: #d32f2f !important;
+  background-color: #ffebee !important;
+  animation: shake 0.4s ease-in-out;
+}
+
+/* 左右晃動動畫 */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+
+/* 2. 完成變綠的格子禁止點擊 */
+.sudoku-grid div.cell.completed {
+  cursor: not-allowed !important;
+}
+
