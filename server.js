@@ -6,29 +6,27 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// 暫存記憶體資料庫（簡易測試用）
+// 暫存記憶體資料庫
 const userProgress = {};
 
-// 驗證伺服器是否正常運作
 app.get('/', (req, res) => {
   res.send('Sudoku Backend Service is Running!');
 });
 
-// 儲存進度 API
+// 儲存通關進度
 app.post('/api/save', (req, res) => {
-  const { username, level } = req.body;
+  const { username, passedLevels } = req.body;
   if (!username) return res.status(400).json({ error: 'Missing username' });
   
-  userProgress[username] = level;
-  console.log(`Saved progress for ${username}: Level ${level}`);
-  res.json({ message: 'Success', username, level });
+  userProgress[username] = passedLevels;
+  res.json({ message: 'Success', username, passedLevels });
 });
 
-// 讀取進度 API
+// 讀取通關進度
 app.get('/api/load/:username', (req, res) => {
   const username = req.params.username;
-  const level = userProgress[username] || 0;
-  res.json({ username, level });
+  const passedLevels = userProgress[username] || new Array(20).fill(false);
+  res.json({ username, passedLevels });
 });
 
 app.listen(PORT, () => {
