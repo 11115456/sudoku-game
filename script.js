@@ -90,6 +90,7 @@ function loadGrid(index) {
       cell.classList.add('cell');
       cell.setAttribute('data-r', String(r));
       cell.setAttribute('data-c', String(c));
+      cell.setAttribute('data-index', String(i));
       
       const blockIndex = Math.floor(r / 3) * 3 + Math.floor(c / 3);
       if (blockIndex % 2 === 0) {
@@ -111,6 +112,7 @@ function loadGrid(index) {
 }
 
 function selectNumber(num, btnElement) {
+  clearWrongCells(); // 下一次操作時自動清除紅字錯誤格
   selectedNum = num;
   document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('selected'));
   if (btnElement) {
@@ -118,12 +120,28 @@ function selectNumber(num, btnElement) {
   }
 }
 
+// 自動清空畫面上所有標記為 wrong 的錯誤格子
+function clearWrongCells() {
+  const wrongCells = document.querySelectorAll('.sudoku-grid .cell.wrong');
+  wrongCells.forEach(cell => {
+    cell.innerText = "";
+    cell.classList.remove('wrong', 'confirmed', 'draft');
+  });
+}
+
 function handleCellClick(cell) {
+  clearWrongCells(); // 玩家點擊盤面任何位置時，自動清空上次的錯字
+
+  // 如果格子已經完成變綠，禁止修改！
+  if (cell.classList.contains('completed')) {
+    return;
+  }
+
   if (selectedNum === null) return alert("請先在下方選擇數字！");
 
   if (selectedNum === 0) {
     cell.innerText = "";
-    cell.classList.remove('draft', 'confirmed');
+    cell.classList.remove('draft', 'confirmed', 'wrong');
     checkCompletedGroups();
     return;
   }
@@ -131,13 +149,27 @@ function handleCellClick(cell) {
   const currentVal = cell.innerText.trim();
   const targetVal = String(selectedNum);
 
+  // 1. 第一次點擊：填寫草稿 (淺色)
   if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') || currentVal !== targetVal) {
     cell.innerText = targetVal;
-    cell.classList.remove('confirmed');
+    cell.classList.remove('confirmed', 'wrong');
     cell.classList.add('draft');
-  } else if (cell.classList.contains('draft')) {
+  } 
+  // 2. 第二次點擊：轉為確定填寫 (深色藍字)，觸發正確性比對！
+  else if (cell.classList.contains('draft')) {
     cell.classList.remove('draft');
-    cell.classList.add('confirmed');
+    
+    // 取得該格對應解答
+    const idx = parseInt(cell.getAttribute('data-index'), 10);
+    const correctSolution = levels[currentLevelIndex].solution;
+    const correctNum = correctSolution[idx];
+
+    // 比對答案：填錯就變紅字 + 晃動動畫
+    if (targetVal !== correctNum) {
+      cell.classList.add('wrong');
+    } else {
+      cell.classList.add('confirmed');
+    }
   }
 
   checkCompletedGroups();
@@ -209,7 +241,7 @@ function checkAnswer() {
   }
 }
 
-// ---------------- 彈窗與事件綁定 ----------------
+// ---------------- 彈窗與帳號管理邏輯 ----------------
 
 function handleLogin() {
   const user = document.getElementById('login-user').value.trim();
@@ -287,11 +319,9 @@ function saveProgress() {
   }).catch(err => console.log(err));
 }
 
-// 初始化頁面與綁定彈窗事件
 window.onload = function() {
   renderMenu();
 
-  // 強化彈窗開啟按鈕綁定
   const openBtn = document.getElementById('auth-open-btn');
   const closeBtn = document.getElementById('auth-close-btn');
   const modal = document.getElementById('auth-modal');
