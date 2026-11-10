@@ -1,7 +1,7 @@
 // 您的專屬 Render 後端網址
 const RENDER_URL = "https://sudoku-game-zjff.onrender.com";
 
-// 完整 20 關數獨題庫
+// 20 關數獨題庫
 const levels = [
   {
     puzzle: "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
@@ -133,7 +133,6 @@ function backToMenu() {
   renderMenu();
 }
 
-// 4. 載入盤面
 function loadGrid(index) {
   const grid = document.getElementById('grid');
   grid.innerHTML = "";
@@ -149,8 +148,8 @@ function loadGrid(index) {
       const i = r * 9 + c;
       const cell = document.createElement('div');
       cell.classList.add('cell');
-      cell.dataset.row = String(r);
-      cell.dataset.col = String(c);
+      cell.setAttribute('data-r', String(r));
+      cell.setAttribute('data-c', String(c));
       
       const blockIndex = Math.floor(r / 3) * 3 + Math.floor(c / 3);
       if (blockIndex % 2 === 0) {
@@ -189,8 +188,11 @@ function handleCellClick(cell) {
     return;
   }
 
-  if ((!cell.classList.contains('draft') && !cell.classList.contains('confirmed')) || cell.innerText !== String(selectedNum)) {
-    cell.innerText = String(selectedNum);
+  const currentVal = cell.innerText.trim();
+  const targetVal = String(selectedNum);
+
+  if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') || currentVal !== targetVal) {
+    cell.innerText = targetVal;
     cell.classList.remove('confirmed');
     cell.classList.add('draft');
   } else if (cell.classList.contains('draft')) {
@@ -201,53 +203,59 @@ function handleCellClick(cell) {
   checkCompletedGroups();
 }
 
-// 嚴格的比對變綠檢查器
+// 超強防錯動態檢查器（防範隱藏字元）
 function checkCompletedGroups() {
   const cells = Array.from(document.querySelectorAll('.sudoku-grid .cell'));
   if (cells.length !== 81) return;
 
   cells.forEach(c => c.classList.remove('completed'));
-  const completedCellSet = new Set();
+  const completedSet = new Set();
 
-  // 1. 檢查行 (Row)
+  // 1. 檢查 9 個橫列
   for (let r = 0; r < 9; r++) {
-    const rowCells = cells.filter(c => c.dataset.row === String(r));
-    const nums = rowCells.map(c => c.innerText.trim());
-    if (isValidSet(nums)) {
-      rowCells.forEach(c => completedCellSet.add(c));
+    const rowCells = cells.filter(c => c.getAttribute('data-r') === String(r));
+    if (checkGroupValid(rowCells)) {
+      rowCells.forEach(c => completedSet.add(c));
     }
   }
 
-  // 2. 檢查列 (Col)
+  // 2. 檢查 9 個直列
   for (let c = 0; c < 9; c++) {
-    const colCells = cells.filter(c => c.dataset.col === String(c));
-    const nums = colCells.map(c => c.innerText.trim());
-    if (isValidSet(nums)) {
-      colCells.forEach(c => completedCellSet.add(c));
+    const colCells = cells.filter(cell => cell.getAttribute('data-c') === String(c));
+    if (checkGroupValid(colCells)) {
+      colCells.forEach(c => completedSet.add(c));
     }
   }
 
-  // 3. 檢查九宮格 (Block)
+  // 3. 檢查 9 個九宮格
   for (let br = 0; br < 3; br++) {
     for (let bc = 0; bc < 3; bc++) {
       const blockCells = cells.filter(c => {
-        const r = parseInt(c.dataset.row, 10);
-        const col = parseInt(c.dataset.col, 10);
+        const r = parseInt(c.getAttribute('data-r'), 10);
+        const col = parseInt(c.getAttribute('data-c'), 10);
         return Math.floor(r / 3) === br && Math.floor(col / 3) === bc;
       });
-      const nums = blockCells.map(c => c.innerText.trim());
-      if (isValidSet(nums)) {
-        blockCells.forEach(c => completedCellSet.add(c));
+      if (checkGroupValid(blockCells)) {
+        blockCells.forEach(c => completedSet.add(c));
       }
     }
   }
 
-  completedCellSet.forEach(c => c.classList.add('completed'));
+  completedSet.forEach(c => c.classList.add('completed'));
 }
 
-function isValidSet(arr) {
-  if (arr.some(n => !n || n === '0')) return false;
-  const set = new Set(arr);
+function checkGroupValid(groupCells) {
+  // 提取數字只取 1-9 的數字字元
+  const nums = groupCells.map(c => {
+    const txt = c.innerText.replace(/[^1-9]/g, '');
+    return txt;
+  });
+
+  // 如果包含空格或不是9個字，代表沒填滿
+  if (nums.some(n => n === '')) return false;
+
+  // 使用 Set 檢查是否有重複數字
+  const set = new Set(nums);
   return set.size === 9;
 }
 
@@ -256,7 +264,8 @@ function checkAnswer() {
   let currentAnswers = "";
   
   cells.forEach(cell => {
-    currentAnswers += cell.innerText || "0";
+    const txt = cell.innerText.replace(/[^1-9]/g, '');
+    currentAnswers += txt || "0";
   });
 
   const levelObj = levels[currentLevelIndex];
