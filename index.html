@@ -14,7 +14,7 @@
     <div id="menu-view">
       <!-- 帳號登入狀態欄 -->
       <div class="user-bar">
-        <button onclick="openAuthModal()" class="auth-btn">🔑 登入 / 註冊</button>
+        <button id="auth-open-btn" class="auth-btn">🔑 登入 / 註冊</button>
         <span id="user-status" class="status-badge offline">🔴 未登入 (進度不會儲存)</span>
       </div>
 
@@ -58,15 +58,15 @@
     </div>
   </div>
 
-  <!-- 登入 / 註冊 彈窗 (Modal) -->
+  <!-- 登入 / 註冊 彈窗 (Modal - 獨立放在 body 頂層) -->
   <div id="auth-modal" class="modal" style="display: none;">
     <div class="modal-content">
-      <span class="close-btn" onclick="closeAuthModal()">&times;</span>
+      <span class="close-btn" id="auth-close-btn">&times;</span>
       
       <!-- 分頁標籤 -->
       <div class="tab-header">
-        <button id="tab-login-btn" class="tab-btn active" onclick="switchTab('login')">登入</button>
-        <button id="tab-register-btn" class="tab-btn" onclick="switchTab('register')">註冊帳號</button>
+        <button id="tab-login-btn" class="tab-btn active">登入</button>
+        <button id="tab-register-btn" class="tab-btn">註冊帳號</button>
       </div>
 
       <!-- 登入表單 -->
