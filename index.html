@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>20關數獨遊戲</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🧩 20 關數獨挑戰</h1>
+    
+    <!-- 帳號登入區域 -->
+    <div id="auth-box">
+      <input type="text" id="username" placeholder="請輸入帳號名">
+      <button onclick="login()">登入 / 載入進度</button>
+    </div>
+    <p id="user-info">目前狀態：未登入（進度不會儲存）</p>
+
+    <!-- 關卡與教學 -->
+    <div class="level-bar">
+      <button onclick="prevLevel()">◀ 上一關</button>
+      <span id="level-title">第 1 關 (教學關)</span>
+      <button onclick="nextLevel()">下一關 ▶</button>
+    </div>
+    
+    <div id="guide-text" class="guide">
+      💡 <b>教學提示</b>：數獨規則為每行、每列與每個 3x3 小格內的數字 1~9 不能重複！
+    </div>
+
+    <!-- 9x9 數獨棋盤 -->
+    <div id="grid" class="sudoku-grid"></div>
+
+    <div class="actions">
+      <button onclick="checkAnswer()">驗證答案</button>
+      <button onclick="saveProgress()" class="save-btn">☁ 儲存進度到雲端</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
