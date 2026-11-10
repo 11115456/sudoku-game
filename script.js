@@ -35,18 +35,6 @@ let selectedNum = null;
 let startTime = null;
 let timerInterval = null;
 
-// 導覽切換函數
-function enterSudoku() {
-  document.getElementById('lobby-view').style.display = 'none';
-  document.getElementById('menu-view').style.display = 'block';
-  renderMenu();
-}
-
-function backToLobby() {
-  document.getElementById('menu-view').style.display = 'none';
-  document.getElementById('lobby-view').style.display = 'block';
-}
-
 function startTimer() {
   stopTimer();
   startTime = Date.now();
@@ -321,7 +309,7 @@ function checkAnswer() {
   }
 }
 
-// ---------------- 彈窗與帳號管理邏輯 ----------------
+// ---------------- 帳號與頁面綁定邏輯 ----------------
 
 function handleLogin() {
   const user = document.getElementById('login-user').value.trim();
@@ -400,6 +388,26 @@ function saveProgress() {
 }
 
 window.onload = function() {
+  // 遊戲大廳 -> 數獨按鈕事件綁定
+  const sudokuBtn = document.getElementById('sudoku-game-btn');
+  const backLobbyBtn = document.getElementById('back-to-lobby-btn');
+
+  if (sudokuBtn) {
+    sudokuBtn.onclick = function() {
+      document.getElementById('lobby-view').style.display = 'none';
+      document.getElementById('menu-view').style.display = 'block';
+      renderMenu();
+    };
+  }
+
+  if (backLobbyBtn) {
+    backLobbyBtn.onclick = function() {
+      document.getElementById('menu-view').style.display = 'none';
+      document.getElementById('lobby-view').style.display = 'block';
+    };
+  }
+
+  // 帳號彈窗事件監聽
   const openBtn = document.getElementById('auth-open-btn');
   const closeBtn = document.getElementById('auth-close-btn');
   const modal = document.getElementById('auth-modal');
