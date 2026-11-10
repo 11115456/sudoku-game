@@ -62,7 +62,7 @@ function backToMenu() {
   renderMenu();
 }
 
-// 載入盤面 + 繪製 3x3 九宮格交替底色
+// 4. 載入盤面 (修復直列座標與變綠標記)
 function loadGrid(index) {
   const grid = document.getElementById('grid');
   grid.innerHTML = "";
@@ -78,12 +78,13 @@ function loadGrid(index) {
       const i = r * 9 + c;
       const cell = document.createElement('div');
       cell.classList.add('cell');
+      
+      // 正確綁定橫列 (row) 與直列 (col) 座標
       cell.dataset.row = r;
       cell.dataset.col = c;
       
-      // 計算九宮格區域 (0~8)
+      // 計算九宮格交替底色
       const blockIndex = Math.floor(r / 3) * 3 + Math.floor(c / 3);
-      // 左上角(0)、正中(4)等區域為深色，相鄰為淺色（棋盤式交替）
       if (blockIndex % 2 === 0) {
         cell.classList.add('block-dark');
       } else {
@@ -99,8 +100,11 @@ function loadGrid(index) {
       grid.appendChild(cell);
     }
   }
+  
+  // 載入完畢後立即執行一次檢查
   checkCompletedGroups();
 }
+
 
 function selectNumber(num, btnElement) {
   selectedNum = num;
