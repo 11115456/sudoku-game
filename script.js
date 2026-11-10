@@ -6,7 +6,7 @@ const levels = [
 let currentLevel = 0;
 let currentUser = "";
 let selectedNum = null; // 當前選中的數字
-const RENDER_URL = "https://my-sudoku-back.onrender.com"; // 請保持你原本的 Render 網址
+const RENDER_URL = "https://sudoku-game-zjff.onrender.com"; // 請保持你原本的 Render 網址
 
 const grid = document.getElementById('grid');
 
