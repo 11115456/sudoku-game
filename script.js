@@ -167,5 +167,9 @@ function saveProgress() {
   }).catch(err => console.log(err));
 }
 
-// 開局先初始化目錄
+// 確保 DOM 載入後立即繪製目錄
+document.addEventListener('DOMContentLoaded', () => {
+  renderMenu();
+});
 renderMenu();
+
