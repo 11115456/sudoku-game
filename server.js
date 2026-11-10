@@ -7,11 +7,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// 記憶體帳號與進度資料庫 (格式: { username: { password, passedLevels } })
+// 記憶體帳號與進度資料庫
 const usersDB = {};
 
 app.get('/', (req, res) => {
-  res.status(200).send('Sudoku Backend with Auth is Live!');
+  res.status(200).send('Sudoku Backend with Timer Sync is Live!');
 });
 
 // 帳號註冊 API
@@ -25,7 +25,8 @@ app.post('/api/register', (req, res) => {
 
   usersDB[username] = {
     password: password,
-    passedLevels: new Array(20).fill(false)
+    passedLevels: new Array(20).fill(false),
+    levelTimes: new Array(20).fill(null)
   };
 
   res.json({ message: '註冊成功', username });
@@ -44,16 +45,24 @@ app.post('/api/login', (req, res) => {
     return res.status(401).json({ error: '密碼不正確' });
   }
 
-  res.json({ message: '登入成功', username, passedLevels: user.passedLevels });
+  res.json({ 
+    message: '登入成功', 
+    username, 
+    passedLevels: user.passedLevels,
+    levelTimes: user.levelTimes || new Array(20).fill(null)
+  });
 });
 
 // 儲存進度 API
 app.post('/api/save', (req, res) => {
-  const { username, passedLevels } = req.body;
+  const { username, passedLevels, levelTimes } = req.body;
   if (!username || !usersDB[username]) return res.status(400).json({ error: '無效的使用者' });
   
   usersDB[username].passedLevels = passedLevels;
-  res.json({ message: '進度儲存成功' });
+  if (levelTimes) {
+    usersDB[username].levelTimes = levelTimes;
+  }
+  res.json({ message: '進度與時間儲存成功' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
