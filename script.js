@@ -26,9 +26,61 @@ const levels = [
 ];
 
 let passedLevels = new Array(20).fill(false);
+let levelTimes = new Array(20).fill(null); // 儲存各關卡的最佳通關秒數
+
 let currentLevelIndex = 0;
 let currentUser = "";
 let selectedNum = null;
+
+// 計時器變數
+let timerInterval = null;
+let secondsElapsed = 0;
+
+function startTimer() {
+  stopTimer();
+  secondsElapsed = 0;
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    secondsElapsed++;
+    updateTimerUI();
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function updateTimerUI() {
+  const timerElem = document.getElementById('timer-display');
+  if (timerElem) {
+    timerElem.innerText = `⏱️ ${formatSeconds(secondsElapsed)}`;
+  }
+}
+
+function formatSeconds(totalSec) {
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+}
+
+// 格式化為繁體中文顯示 (如：1小時2分30秒)
+function formatTimeChinese(totalSec) {
+  if (!totalSec && totalSec !== 0) return "";
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+
+  let res = "";
+  if (hrs > 0) res += `${hrs}小時`;
+  if (mins > 0 || hrs > 0) res += `${mins}分`;
+  res += `${secs}秒`;
+  return res;
+}
 
 function renderMenu() {
   const menuContainer = document.getElementById('level-menu');
@@ -39,15 +91,22 @@ function renderMenu() {
     const card = document.createElement('div');
     const isUnlocked = (i === 0) || passedLevels[i - 1];
     const isPassed = passedLevels[i];
+    const bestTime = levelTimes[i];
 
     card.className = `level-card ${isUnlocked ? 'unlocked' : 'locked'}`;
 
     if (isUnlocked) {
       card.onclick = function() { startLevel(i); };
+      
+      let badgeText = isPassed ? '✅ 已通過' : '❌ 未通過';
+      if (isPassed && bestTime !== null && bestTime !== undefined) {
+        badgeText += ` (${formatTimeChinese(bestTime)})`;
+      }
+
       card.innerHTML = `
         <strong>第 ${i + 1} 關</strong>
         <span class="badge ${isPassed ? 'passed' : 'failed'}">
-          ${isPassed ? '✅ 已通過' : '❌ 未通過'}
+          ${badgeText}
         </span>
       `;
     } else {
@@ -65,9 +124,11 @@ function startLevel(index) {
   document.getElementById('menu-view').style.display = 'none';
   document.getElementById('game-view').style.display = 'block';
   loadGrid(index);
+  startTimer(); // 開始計時
 }
 
 function backToMenu() {
+  stopTimer(); // 停止計時
   document.getElementById('game-view').style.display = 'none';
   document.getElementById('menu-view').style.display = 'block';
   renderMenu();
@@ -131,12 +192,10 @@ function clearWrongCells() {
 function handleCellClick(cell) {
   clearWrongCells();
 
-  // 若該格已完成變綠，完全鎖定禁止點擊
   if (cell.classList.contains('completed')) return;
 
   if (selectedNum === null) return alert("請先在下方選擇數字！");
 
-  // 橡皮擦
   if (selectedNum === 0) {
     cell.innerText = "";
     cell.classList.remove('draft', 'confirmed', 'wrong');
@@ -149,21 +208,17 @@ function handleCellClick(cell) {
   const idx = parseInt(cell.getAttribute('data-index'), 10);
   const correctNum = levels[currentLevelIndex].solution[idx];
 
-  // 1. 空格 或 現有數字不同 $\rightarrow$ 填入草稿 (淺色 draft)
   if (currentVal === "" || (currentVal !== targetVal && !cell.classList.contains('confirmed'))) {
     cell.innerText = targetVal;
     cell.classList.remove('confirmed', 'wrong');
     cell.classList.add('draft');
   } 
-  // 2. 再次點擊相同數字草稿 $\rightarrow$ 轉為正式填寫（立即進行答案比對！）
   else if (cell.classList.contains('draft') && currentVal === targetVal) {
     cell.classList.remove('draft');
 
     if (targetVal !== correctNum) {
-      // 答錯：立刻變紅字 + 震動！
       cell.classList.add('wrong');
     } else {
-      // 答對：變成深藍色確定！
       cell.classList.add('confirmed');
     }
   }
@@ -231,8 +286,20 @@ function checkAnswer() {
   const correctSolution = levelObj ? levelObj.solution : null;
 
   if (correctSolution && currentAnswers === correctSolution) {
+    stopTimer(); // 停止計時
+    
     passedLevels[currentLevelIndex] = true;
-    alert(`🎉 恭喜通過第 ${currentLevelIndex + 1} 關！下一關已成功解鎖！`);
+
+    // 紀錄最佳時間（若無紀錄或時間更短則更新）
+    const currentTime = secondsElapsed;
+    const oldTime = levelTimes[currentLevelIndex];
+    if (oldTime === null || oldTime === undefined || currentTime < oldTime) {
+      levelTimes[currentLevelIndex] = currentTime;
+    }
+
+    const timeStr = formatTimeChinese(currentTime);
+    alert(`🎉 恭喜通過第 ${currentLevelIndex + 1} 關！\n⏱️ 本次耗時：${timeStr}\n下一關已成功解鎖！`);
+    
     saveProgress();
     backToMenu();
   } else {
@@ -260,6 +327,7 @@ function handleLogin() {
     } else {
       currentUser = user;
       passedLevels = data.passedLevels || new Array(20).fill(false);
+      levelTimes = data.levelTimes || new Array(20).fill(null);
       updateUserStatusUI();
       document.getElementById('auth-modal').style.display = 'none';
       renderMenu();
@@ -289,6 +357,7 @@ function handleRegister() {
     } else {
       currentUser = user;
       passedLevels = new Array(20).fill(false);
+      levelTimes = new Array(20).fill(null);
       updateUserStatusUI();
       document.getElementById('auth-modal').style.display = 'none';
       renderMenu();
@@ -314,7 +383,7 @@ function saveProgress() {
   fetch(`${RENDER_URL}/api/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: currentUser, passedLevels })
+    body: JSON.stringify({ username: currentUser, passedLevels, levelTimes })
   }).catch(err => console.log(err));
 }
 
