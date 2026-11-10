@@ -10,8 +10,79 @@ const levels = [
   {
     puzzle: "000260701680070090190004500820100040004602900050003028009300074040050036703018000",
     solution: "435269781682571493197834526826195347374682915951473628519326874248759136763918254"
+  },
+  {
+    puzzle: "100007090030020008009600500005003000010080020000400900002006100800050070040100006",
+    solution: "164537298237924618589618543425793861913685724768412935372846159891359472645172386"
+  },
+  {
+    puzzle: "020608000580009700000040000370000500600000004008000013000020000009800036000306090",
+    solution: "124678953583159742967243185371964528695281374248537613816425970459812436732396891"
+  },
+  {
+    puzzle: "000000012000000003002300400001800005060070080000009000008500000900040500470006000",
+    solution: "645798312789124653132351497291835745364271980507469231818593274923647518476186329"
+  },
+  {
+    puzzle: "000080400000000000000000057000005700000004002000100000000010000050000000008000060",
+    solution: "167589423894327165325641857913865742586274932472193586239718654751436298648952361"
+  },
+  {
+    puzzle: "000006000059000008200008000045000000003000000006003054000325006000000000000000000",
+    solution: "381456297459732168267198345845917623713284596926563854174325986598641732632879415"
+  },
+  {
+    puzzle: "000000000000003085001020000000507000004000100090000000500000073002010000000040009",
+    solution: "987654321246193785351827469813567942724985136695432817568249573432716958179348259"
+  },
+  {
+    puzzle: "000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    solution: "123456789456789123789123456214365897365897214897214365531642978642978531978531642"
+  },
+  {
+    puzzle: "800000000003600000070090200050007000000045700000100030001000068008500010090000400",
+    solution: "812436957943658123675291248459387612236945781781129534321749568168523914597812436"
+  },
+  {
+    puzzle: "000700000100000000000430200000000006000509000000000418000081000002000050040000300",
+    solution: "625714893138925674974438215283174596417569328596230418759381642362847159841652387"
+  },
+  {
+    puzzle: "000000000000003085001020000000507000004000100090000000500000073002010000000040009",
+    solution: "987654321246193785351827469813567942724985136695432817568249573432716958179348259"
+  },
+  {
+    puzzle: "000000010400000000020000000000050407008000300001090000300400200050010000000800000",
+    solution: "597328614413965872826174935132659487968247351741893526389416257254712369675839148"
+  },
+  {
+    puzzle: "000000000000000003002300400001800005060070080000009000008500000900040500470006000",
+    solution: "645798312789124653132351497291835745364271980507469231818593274923647518476186329"
+  },
+  {
+    puzzle: "000000000000003085001020000000507000004000100090000000500000073002010000000040009",
+    solution: "987654321246193785351827469813567942724985136695432817568249573432716958179348259"
+  },
+  {
+    puzzle: "100000008020000030003000400000400001000050000000006000005000700060000080900000002",
+    solution: "147569238826714539593823416738492651612357894459186327285931746364275189971648502"
+  },
+  {
+    puzzle: "000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    solution: "123456789456789123789123456214365897365897214897214365531642978642978531978531642"
+  },
+  {
+    puzzle: "800000000003600000070090200050007000000045700000100030001000068008500010090000400",
+    solution: "812436957943658123675291248459387612236945781781129534321749568168523914597812436"
+  },
+  {
+    puzzle: "000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    solution: "123456789456789123789123456214365897365897214897214365531642978642978531978531642"
+  },
+  {
+    puzzle: "800000000003600000070090200050007000000045700000100030001000068008500010090000400",
+    solution: "812436957943658123675291248459387612236945781781129534321749568168523914597812436"
   }
-  // 其餘 18 關保持原樣即可...
 ];
 
 let passedLevels = new Array(20).fill(false);
@@ -62,7 +133,7 @@ function backToMenu() {
   renderMenu();
 }
 
-// 4. 載入盤面 (修復直列座標與變綠標記)
+// 4. 載入盤面
 function loadGrid(index) {
   const grid = document.getElementById('grid');
   grid.innerHTML = "";
@@ -78,12 +149,9 @@ function loadGrid(index) {
       const i = r * 9 + c;
       const cell = document.createElement('div');
       cell.classList.add('cell');
+      cell.dataset.row = String(r);
+      cell.dataset.col = String(c);
       
-      // 正確綁定橫列 (row) 與直列 (col) 座標
-      cell.dataset.row = r;
-      cell.dataset.col = c;
-      
-      // 計算九宮格交替底色
       const blockIndex = Math.floor(r / 3) * 3 + Math.floor(c / 3);
       if (blockIndex % 2 === 0) {
         cell.classList.add('block-dark');
@@ -100,11 +168,8 @@ function loadGrid(index) {
       grid.appendChild(cell);
     }
   }
-  
-  // 載入完畢後立即執行一次檢查
   checkCompletedGroups();
 }
-
 
 function selectNumber(num, btnElement) {
   selectedNum = num;
@@ -119,13 +184,13 @@ function handleCellClick(cell) {
 
   if (selectedNum === 0) {
     cell.innerText = "";
-    cell.className = cell.className.replace('draft', '').replace('confirmed', '').trim();
+    cell.classList.remove('draft', 'confirmed');
     checkCompletedGroups();
     return;
   }
 
-  if ((!cell.classList.contains('draft') && !cell.classList.contains('confirmed')) || cell.innerText != selectedNum) {
-    cell.innerText = selectedNum;
+  if ((!cell.classList.contains('draft') && !cell.classList.contains('confirmed')) || cell.innerText !== String(selectedNum)) {
+    cell.innerText = String(selectedNum);
     cell.classList.remove('confirmed');
     cell.classList.add('draft');
   } else if (cell.classList.contains('draft')) {
@@ -133,60 +198,55 @@ function handleCellClick(cell) {
     cell.classList.add('confirmed');
   }
 
-  // 每次填入數字後，動態檢查並更新「綠色完成數字」
   checkCompletedGroups();
 }
 
-// 動態檢查：若行、列或九宮格內 1~9 填滿且完全正確，數字變綠色！
+// 嚴格的比對變綠檢查器
 function checkCompletedGroups() {
   const cells = Array.from(document.querySelectorAll('.sudoku-grid .cell'));
   if (cells.length !== 81) return;
 
-  // 先清除所有變綠標記
   cells.forEach(c => c.classList.remove('completed'));
-
   const completedCellSet = new Set();
 
-  // 1. 檢查每行 (Row)
+  // 1. 檢查行 (Row)
   for (let r = 0; r < 9; r++) {
-    const rowCells = cells.filter(c => parseInt(c.dataset.row) === r);
-    const nums = rowCells.map(c => c.innerText);
+    const rowCells = cells.filter(c => c.dataset.row === String(r));
+    const nums = rowCells.map(c => c.innerText.trim());
     if (isValidSet(nums)) {
       rowCells.forEach(c => completedCellSet.add(c));
     }
   }
 
-  // 2. 檢查每列 (Column)
+  // 2. 檢查列 (Col)
   for (let c = 0; c < 9; c++) {
-    const colCells = cells.filter(c => parseInt(c.dataset.col) === c);
-    const nums = colCells.map(c => c.innerText);
+    const colCells = cells.filter(c => c.dataset.col === String(c));
+    const nums = colCells.map(c => c.innerText.trim());
     if (isValidSet(nums)) {
       colCells.forEach(c => completedCellSet.add(c));
     }
   }
 
-  // 3. 檢查 9 個九宮格 (Block)
+  // 3. 檢查九宮格 (Block)
   for (let br = 0; br < 3; br++) {
     for (let bc = 0; bc < 3; bc++) {
       const blockCells = cells.filter(c => {
-        const r = parseInt(c.dataset.row);
-        const col = parseInt(c.dataset.col);
+        const r = parseInt(c.dataset.row, 10);
+        const col = parseInt(c.dataset.col, 10);
         return Math.floor(r / 3) === br && Math.floor(col / 3) === bc;
       });
-      const nums = blockCells.map(c => c.innerText);
+      const nums = blockCells.map(c => c.innerText.trim());
       if (isValidSet(nums)) {
         blockCells.forEach(c => completedCellSet.add(c));
       }
     }
   }
 
-  // 將所有屬於完成區域的格子加上 completed 變綠樣式
   completedCellSet.forEach(c => c.classList.add('completed'));
 }
 
-// 驗證是否剛好包含 1~9 的不重複數字
 function isValidSet(arr) {
-  if (arr.includes('') || arr.includes('0')) return false;
+  if (arr.some(n => !n || n === '0')) return false;
   const set = new Set(arr);
   return set.size === 9;
 }
