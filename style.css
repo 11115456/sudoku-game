@@ -102,3 +102,23 @@ button { padding: 8px 12px; background: #4CAF50; color: white; border: none; bor
 .num-btn.selected { background: #2196F3; color: white; }
 .erase-btn { width: auto; padding: 0 6px; font-size: 12px; background: #ff9800; }
 .actions { display: flex; justify-content: space-around; }
+
+/* 1. 九宮格雙色交替 (深淺背景) */
+.sudoku-grid div.cell.block-dark {
+  background-color: #e2e8f0; /* 較深的灰藍色 */
+}
+.sudoku-grid div.cell.block-light {
+  background-color: #ffffff; /* 純白色 */
+}
+
+/* 預設數字（題目固定數字）在深色塊中的底色配合 */
+.sudoku-grid div.cell.fixed.block-dark {
+  background-color: #cbd5e1;
+}
+
+/* 2. 當整行、整列或九宮格完成且正確時，文字變成綠色 */
+.sudoku-grid div.cell.completed {
+  color: #2e7d32 !important; /* 鮮豔的成功綠色 */
+  font-weight: bold;
+}
+
