@@ -120,25 +120,23 @@ function selectNumber(num, btnElement) {
   }
 }
 
-// 自動清除紅字錯誤格
 function clearWrongCells() {
   const wrongCells = document.querySelectorAll('.sudoku-grid .cell.wrong');
   wrongCells.forEach(cell => {
     cell.innerText = "";
-    cell.classList.remove('wrong', 'confirmed', 'draft');
+    cell.className = cell.className.replace(/\b(wrong|confirmed|draft)\b/g, '').trim();
   });
 }
 
 function handleCellClick(cell) {
   clearWrongCells();
 
-  // 如果格子已經完成變綠，完全禁止修改！
-  if (cell.classList.contains('completed')) {
-    return;
-  }
+  // 若該格已完成變綠，完全鎖定禁止點擊
+  if (cell.classList.contains('completed')) return;
 
   if (selectedNum === null) return alert("請先在下方選擇數字！");
 
+  // 橡皮擦
   if (selectedNum === 0) {
     cell.innerText = "";
     cell.classList.remove('draft', 'confirmed', 'wrong');
@@ -147,30 +145,25 @@ function handleCellClick(cell) {
   }
 
   const targetVal = String(selectedNum);
+  const currentVal = cell.innerText.trim();
+  const idx = parseInt(cell.getAttribute('data-index'), 10);
+  const correctNum = levels[currentLevelIndex].solution[idx];
 
-  // 1. 空格 -> 第一次點擊：填寫草稿 (淺色 draft)
-  if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') && !cell.classList.contains('wrong')) {
+  // 1. 空格 或 現有數字不同 $\rightarrow$ 填入草稿 (淺色 draft)
+  if (currentVal === "" || (currentVal !== targetVal && !cell.classList.contains('confirmed'))) {
     cell.innerText = targetVal;
+    cell.classList.remove('confirmed', 'wrong');
     cell.classList.add('draft');
   } 
-  // 2. 如果點擊的數字與目前草稿數字不同 -> 更新為新數字草稿 (淺色 draft)
-  else if (cell.classList.contains('draft') && cell.innerText.trim() !== targetVal) {
-    cell.innerText = targetVal;
-  }
-  // 3. 再次點擊相同數字草稿 -> 轉為確定 (比對答案！)
-  else if (cell.classList.contains('draft') && cell.innerText.trim() === targetVal) {
+  // 2. 再次點擊相同數字草稿 $\rightarrow$ 轉為正式填寫（立即進行答案比對！）
+  else if (cell.classList.contains('draft') && currentVal === targetVal) {
     cell.classList.remove('draft');
-    
-    // 取出正確解答進行比對
-    const idx = parseInt(cell.getAttribute('data-index'), 10);
-    const correctSolution = levels[currentLevelIndex].solution;
-    const correctNum = correctSolution[idx];
 
     if (targetVal !== correctNum) {
-      // 填錯了：瞬間變紅字 + 晃動動畫！
+      // 答錯：立刻變紅字 + 震動！
       cell.classList.add('wrong');
     } else {
-      // 填對了：轉為藍字確定！
+      // 答對：變成深藍色確定！
       cell.classList.add('confirmed');
     }
   }
@@ -216,7 +209,6 @@ function checkCompletedGroups() {
 }
 
 function checkGroupValid(groupCells) {
-  // 只有當所有格子都不是草稿(draft)且不是錯字(wrong)時才算全對
   if (groupCells.some(c => c.classList.contains('draft') || c.classList.contains('wrong'))) {
     return false;
   }
