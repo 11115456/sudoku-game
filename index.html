@@ -9,7 +9,7 @@
 <body>
   <div class="container">
     
-    <!-- 1. 主首頁：遊戲大廳 (頂部含登入/註冊) -->
+    <!-- 1. 主首頁：遊戲大廳 -->
     <div id="lobby-view">
       <h1>🎮 綜合遊戲樂園</h1>
       <div class="user-bar">
@@ -19,19 +19,19 @@
 
       <h3>🔥 選擇遊戲</h3>
       <div class="game-hall-grid">
-        <div class="game-card" onclick="enterSudoku()">
+        <!-- 改為真實按鈕元件 -->
+        <button id="sudoku-game-btn" class="game-card-btn">
           <div class="game-icon">🧩</div>
           <strong>20 關數獨挑戰</strong>
           <p>邏輯推理與經典數獨關卡</p>
-        </div>
-        <!-- 預留未來擴充其他遊戲的地方 -->
+        </button>
       </div>
     </div>
 
-    <!-- 2. 數獨關卡目錄頁 (無登入註冊按鈕) -->
+    <!-- 2. 數獨關卡目錄頁 -->
     <div id="menu-view" style="display: none;">
       <div class="top-nav">
-        <button onclick="backToLobby()" class="nav-back-btn">◀ 返回遊戲大廳</button>
+        <button id="back-to-lobby-btn" class="nav-back-btn">◀ 返回遊戲大廳</button>
       </div>
       <h2>🧩 20 關數獨挑戰</h2>
       <h3>🎯 選擇關卡</h3>
@@ -50,10 +50,8 @@
         💡 <b>提示</b>：點選數字再點格子可填寫草稿（淺色），再點一次確認填入（深色）。
       </div>
 
-      <!-- 9x9 數獨棋盤 -->
       <div id="grid" class="sudoku-grid"></div>
 
-      <!-- 數字鍵盤 -->
       <div class="number-pad">
         <button class="num-btn" onclick="selectNumber(1, this)">1</button>
         <button class="num-btn" onclick="selectNumber(2, this)">2</button>
@@ -75,7 +73,7 @@
 
   </div>
 
-  <!-- 登入 / 註冊 彈窗 (Modal) -->
+  <!-- 登入 / 註冊 彈窗 -->
   <div id="auth-modal" class="modal" style="display: none;">
     <div class="modal-content">
       <span class="close-btn" id="auth-close-btn">&times;</span>
