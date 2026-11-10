@@ -142,3 +142,66 @@ button:hover {
   display: flex;
   justify-content: space-around;
 }
+/* 數字按鈕區 */
+.number-pad {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.num-btn {
+  width: 36px;
+  height: 40px;
+  font-size: 18px;
+  background-color: #e0e0e0;
+  color: #333;
+  padding: 0;
+}
+
+.num-btn.selected {
+  background-color: #2196F3;
+  color: white;
+  transform: scale(1.05);
+}
+
+.erase-btn {
+  width: auto;
+  padding: 0 8px;
+  font-size: 14px;
+  background-color: #ff9800;
+}
+
+/* 格子動態狀態 */
+.sudoku-grid div.cell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;
+  font-weight: bold;
+  background-color: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 預設提示數字 (不可修改) */
+.sudoku-grid div.cell.fixed {
+  background-color: #e9ecef;
+  color: #212529;
+  cursor: not-allowed;
+}
+
+/* 點擊第一下：淺淺的預覽數字 (Draft) */
+.sudoku-grid div.cell.draft {
+  color: #aaa;
+  font-weight: normal;
+}
+
+/* 點擊第二下：正式填入的數字 */
+.sudoku-grid div.cell.confirmed {
+  color: #1976D2;
+  font-weight: bold;
+}
