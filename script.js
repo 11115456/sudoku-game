@@ -112,7 +112,7 @@ function loadGrid(index) {
 }
 
 function selectNumber(num, btnElement) {
-  clearWrongCells(); // 下一次操作時自動清除紅字錯誤格
+  clearWrongCells();
   selectedNum = num;
   document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('selected'));
   if (btnElement) {
@@ -120,7 +120,7 @@ function selectNumber(num, btnElement) {
   }
 }
 
-// 自動清空畫面上所有標記為 wrong 的錯誤格子
+// 自動清除紅字錯誤格
 function clearWrongCells() {
   const wrongCells = document.querySelectorAll('.sudoku-grid .cell.wrong');
   wrongCells.forEach(cell => {
@@ -130,9 +130,9 @@ function clearWrongCells() {
 }
 
 function handleCellClick(cell) {
-  clearWrongCells(); // 玩家點擊盤面任何位置時，自動清空上次的錯字
+  clearWrongCells();
 
-  // 如果格子已經完成變綠，禁止修改！
+  // 如果格子已經完成變綠，完全禁止修改！
   if (cell.classList.contains('completed')) {
     return;
   }
@@ -146,28 +146,31 @@ function handleCellClick(cell) {
     return;
   }
 
-  const currentVal = cell.innerText.trim();
   const targetVal = String(selectedNum);
 
-  // 1. 第一次點擊：填寫草稿 (淺色)
-  if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') || currentVal !== targetVal) {
+  // 1. 空格 -> 第一次點擊：填寫草稿 (淺色 draft)
+  if (!cell.classList.contains('draft') && !cell.classList.contains('confirmed') && !cell.classList.contains('wrong')) {
     cell.innerText = targetVal;
-    cell.classList.remove('confirmed', 'wrong');
     cell.classList.add('draft');
   } 
-  // 2. 第二次點擊：轉為確定填寫 (深色藍字)，觸發正確性比對！
-  else if (cell.classList.contains('draft')) {
+  // 2. 如果點擊的數字與目前草稿數字不同 -> 更新為新數字草稿 (淺色 draft)
+  else if (cell.classList.contains('draft') && cell.innerText.trim() !== targetVal) {
+    cell.innerText = targetVal;
+  }
+  // 3. 再次點擊相同數字草稿 -> 轉為確定 (比對答案！)
+  else if (cell.classList.contains('draft') && cell.innerText.trim() === targetVal) {
     cell.classList.remove('draft');
     
-    // 取得該格對應解答
+    // 取出正確解答進行比對
     const idx = parseInt(cell.getAttribute('data-index'), 10);
     const correctSolution = levels[currentLevelIndex].solution;
     const correctNum = correctSolution[idx];
 
-    // 比對答案：填錯就變紅字 + 晃動動畫
     if (targetVal !== correctNum) {
+      // 填錯了：瞬間變紅字 + 晃動動畫！
       cell.classList.add('wrong');
     } else {
+      // 填對了：轉為藍字確定！
       cell.classList.add('confirmed');
     }
   }
@@ -213,6 +216,10 @@ function checkCompletedGroups() {
 }
 
 function checkGroupValid(groupCells) {
+  // 只有當所有格子都不是草稿(draft)且不是錯字(wrong)時才算全對
+  if (groupCells.some(c => c.classList.contains('draft') || c.classList.contains('wrong'))) {
+    return false;
+  }
   const nums = groupCells.map(c => c.innerText.replace(/[^1-9]/g, ''));
   if (nums.some(n => n === '')) return false;
   const set = new Set(nums);
