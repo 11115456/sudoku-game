@@ -137,3 +137,21 @@ button { padding: 8px 12px; background: #4CAF50; color: white; border: none; bor
   cursor: not-allowed !important;
 }
 
+/* 計時器顯示樣式 */
+.timer {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: bold;
+  color: #d32f2f;
+  background: #ffebee;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+/* 關卡選單的文字換行適應 */
+.level-card .badge {
+  display: inline-block;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.3;
+}
