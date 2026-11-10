@@ -8,7 +8,7 @@ const levels = [
 let currentLevel = 0;
 let currentUser = "";
 // 換成你之後在 Render 申請到的網址（範例）
-const RENDER_URL = "https://my-sudoku-back.onrender.com"; 
+const RENDER_URL = "https://sudoku-game-zjff.onrender.com/"; 
 
 const grid = document.getElementById('grid');
 
