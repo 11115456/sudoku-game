@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
+
+// 綁定 Render 指定的 PORT (若沒有則預設 3000)
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
@@ -9,8 +11,9 @@ app.use(express.json());
 // 暫存記憶體資料庫
 const userProgress = {};
 
+// 健康檢查 Endpoint (讓 Render 能成功掃描到 Port)
 app.get('/', (req, res) => {
-  res.send('Sudoku Backend Service is Running!');
+  res.status(200).send('Sudoku Backend is Live!');
 });
 
 // 儲存通關進度
@@ -29,6 +32,7 @@ app.get('/api/load/:username', (req, res) => {
   res.json({ username, passedLevels });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// 必須傾聽 0.0.0.0 以供外部通訊
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is successfully running on port ${PORT}`);
 });
