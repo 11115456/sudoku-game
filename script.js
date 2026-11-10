@@ -203,7 +203,6 @@ function handleCellClick(cell) {
   checkCompletedGroups();
 }
 
-// 超強防錯動態檢查器（防範隱藏字元）
 function checkCompletedGroups() {
   const cells = Array.from(document.querySelectorAll('.sudoku-grid .cell'));
   if (cells.length !== 81) return;
@@ -211,7 +210,6 @@ function checkCompletedGroups() {
   cells.forEach(c => c.classList.remove('completed'));
   const completedSet = new Set();
 
-  // 1. 檢查 9 個橫列
   for (let r = 0; r < 9; r++) {
     const rowCells = cells.filter(c => c.getAttribute('data-r') === String(r));
     if (checkGroupValid(rowCells)) {
@@ -219,7 +217,6 @@ function checkCompletedGroups() {
     }
   }
 
-  // 2. 檢查 9 個直列
   for (let c = 0; c < 9; c++) {
     const colCells = cells.filter(cell => cell.getAttribute('data-c') === String(c));
     if (checkGroupValid(colCells)) {
@@ -227,7 +224,6 @@ function checkCompletedGroups() {
     }
   }
 
-  // 3. 檢查 9 個九宮格
   for (let br = 0; br < 3; br++) {
     for (let bc = 0; bc < 3; bc++) {
       const blockCells = cells.filter(c => {
@@ -245,16 +241,8 @@ function checkCompletedGroups() {
 }
 
 function checkGroupValid(groupCells) {
-  // 提取數字只取 1-9 的數字字元
-  const nums = groupCells.map(c => {
-    const txt = c.innerText.replace(/[^1-9]/g, '');
-    return txt;
-  });
-
-  // 如果包含空格或不是9個字，代表沒填滿
+  const nums = groupCells.map(c => c.innerText.replace(/[^1-9]/g, ''));
   if (nums.some(n => n === '')) return false;
-
-  // 使用 Set 檢查是否有重複數字
   const set = new Set(nums);
   return set.size === 9;
 }
@@ -281,22 +269,102 @@ function checkAnswer() {
   }
 }
 
-function login() {
-  const user = document.getElementById('username').value;
-  if (!user) return alert("請輸入帳號名稱");
-  currentUser = user;
-  document.getElementById('user-info').innerText = `目前登入帳號：${currentUser}`;
-  
-  fetch(`${RENDER_URL}/api/load/${currentUser}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data && data.passedLevels) {
-        passedLevels = data.passedLevels;
-      }
+// ---------------- 彈窗與帳號管理邏輯 ----------------
+
+function openAuthModal() {
+  document.getElementById('auth-modal').style.display = 'flex';
+}
+
+function closeAuthModal() {
+  document.getElementById('auth-modal').style.display = 'none';
+}
+
+function switchTab(type) {
+  const loginForm = document.getElementById('login-form');
+  const regForm = document.getElementById('register-form');
+  const loginBtn = document.getElementById('tab-login-btn');
+  const regBtn = document.getElementById('tab-register-btn');
+
+  if (type === 'login') {
+    loginForm.style.display = 'flex';
+    regForm.style.display = 'none';
+    loginBtn.classList.add('active');
+    regBtn.classList.remove('active');
+  } else {
+    loginForm.style.display = 'none';
+    regForm.style.display = 'flex';
+    regBtn.classList.add('active');
+    loginBtn.classList.remove('active');
+  }
+}
+
+// 處理登入
+function handleLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value.trim();
+
+  if (!user || !pass) return alert("請輸入完整帳號與密碼！");
+
+  fetch(`${RENDER_URL}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user, password: pass })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert(`登入失敗：${data.error}`);
+    } else {
+      currentUser = user;
+      passedLevels = data.passedLevels || new Array(20).fill(false);
+      updateUserStatusUI();
+      closeAuthModal();
       renderMenu();
-      alert(`歡迎回來 ${currentUser}！進度已同步。`);
-    })
-    .catch(() => renderMenu());
+      alert(`🎉 登入成功！歡迎回來，${currentUser}`);
+    }
+  })
+  .catch(() => alert("伺服器連線失敗"));
+}
+
+// 處理註冊
+function handleRegister() {
+  const user = document.getElementById('reg-user').value.trim();
+  const pass1 = document.getElementById('reg-pass1').value.trim();
+  const pass2 = document.getElementById('reg-pass2').value.trim();
+
+  if (!user || !pass1 || !pass2) return alert("請填寫所有欄位！");
+  if (pass1 !== pass2) return alert("兩次輸入的密碼不一致，請重新檢查！");
+
+  fetch(`${RENDER_URL}/api/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user, password: pass1 })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert(`註冊失敗：${data.error}`);
+    } else {
+      currentUser = user;
+      passedLevels = new Array(20).fill(false);
+      updateUserStatusUI();
+      closeAuthModal();
+      renderMenu();
+      alert(`🎉 註冊成功並已自動登入！歡迎，${currentUser}`);
+    }
+  })
+  .catch(() => alert("伺服器連線失敗"));
+}
+
+function updateUserStatusUI() {
+  const statusElem = document.getElementById('user-status');
+  if (currentUser) {
+    statusElem.innerText = `🟢 已登入 (${currentUser})`;
+    statusElem.className = 'status-badge online';
+  } else {
+    statusElem.innerText = '🔴 未登入 (進度不會儲存)';
+    statusElem.className = 'status-badge offline';
+  }
 }
 
 function saveProgress() {
