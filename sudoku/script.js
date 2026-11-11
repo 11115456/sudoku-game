@@ -316,11 +316,39 @@ function saveProgress() {
   }).catch(err => console.log(err));
 }
 
+// ⚠️ 新增：向後端請求當前帳號的最新進度資料
+function loadUserProgress() {
+  if (!currentUser) {
+    renderMenu();
+    return;
+  }
+
+  fetch(`${RENDER_URL}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: currentUser, password: "" }) 
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.passedLevels) {
+      passedLevels = data.passedLevels;
+    }
+    if (data.levelTimes) {
+      levelTimes = data.levelTimes;
+    }
+    renderMenu();
+  })
+  .catch(err => {
+    console.log("載入使用者資料失敗:", err);
+    renderMenu();
+  });
+}
+
 window.onload = function() {
   // 1. 自動同步大廳的已登入使用者資訊
   currentUser = localStorage.getItem('currentUser') || "";
 
-  // 2. 綁定返回大廳按鈕（回根目錄的 index.html）
+  // 2. 綁定返回大廳按鈕
   const backLobbyBtn = document.getElementById('back-to-lobby-btn');
   if (backLobbyBtn) {
     backLobbyBtn.onclick = function() {
@@ -328,6 +356,6 @@ window.onload = function() {
     };
   }
 
-  // 3. 渲染選單
-  renderMenu();
+  // 3. 自動載入雲端與帳號紀錄並渲染選單
+  loadUserProgress();
 };
