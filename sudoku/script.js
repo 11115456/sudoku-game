@@ -316,17 +316,19 @@ function saveProgress() {
   }).catch(err => console.log(err));
 }
 
-// ⚠️ 新增：向後端請求當前帳號的最新進度資料
+// ⚠️ 向後端請求該帳號進度
 function loadUserProgress() {
   if (!currentUser) {
+    passedLevels = new Array(20).fill(false);
+    levelTimes = new Array(20).fill(null);
     renderMenu();
     return;
   }
 
-  fetch(`${RENDER_URL}/api/login`, {
+  fetch(`${RENDER_URL}/api/user-data`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: currentUser, password: "" }) 
+    body: JSON.stringify({ username: currentUser }) 
   })
   .then(res => res.json())
   .then(data => {
@@ -339,16 +341,19 @@ function loadUserProgress() {
     renderMenu();
   })
   .catch(err => {
-    console.log("載入使用者資料失敗:", err);
+    console.log("載入雲端資料失敗，嘗試使用本地存檔:", err);
+    // 備用：讀取本地暫存
+    const localPassed = localStorage.getItem(`passedLevels_${currentUser}`);
+    const localTimes = localStorage.getItem(`levelTimes_${currentUser}`);
+    if (localPassed) passedLevels = JSON.parse(localPassed);
+    if (localTimes) levelTimes = JSON.parse(localTimes);
     renderMenu();
   });
 }
 
 window.onload = function() {
-  // 1. 自動同步大廳的已登入使用者資訊
   currentUser = localStorage.getItem('currentUser') || "";
 
-  // 2. 綁定返回大廳按鈕
   const backLobbyBtn = document.getElementById('back-to-lobby-btn');
   if (backLobbyBtn) {
     backLobbyBtn.onclick = function() {
@@ -356,6 +361,5 @@ window.onload = function() {
     };
   }
 
-  // 3. 自動載入雲端與帳號紀錄並渲染選單
   loadUserProgress();
 };
