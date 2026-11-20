@@ -72,6 +72,8 @@ const SONGS = [
   }
 ];
 
+const MISS_WINDOW_SEC = 0.145; // 過線後 145ms 漸隱下墜直到完全透明判 Miss
+
 let selectedSongIndex = 1; // 預設選中 Lv.3
 let laneCount = 4;
 let noteSpeed = 8;       // 範圍 1 ~ 15
@@ -402,6 +404,7 @@ function createNoteObject(time, duration, laneIdx) {
     completed: false,
     missed: false,
     lastTickTime: time,
+    currentY: -300,
     el: noteEl
   });
 }
@@ -527,14 +530,15 @@ function pulseHitLine() {
   }, 60);
 }
 
-// 在該軌道判定線處產生打擊閃光特效
-function spawnHitSpark(laneIdx, isGood = false) {
+// 從按鍵（音符當下位置）炸開判定光效：PERFECT 為黃色光，GOOD 為綠色光
+function spawnNoteBurst(laneIdx, yPos, isGood = false) {
   const laneEl = document.getElementById(`lane-${laneIdx}`);
   if (!laneEl) return;
-  const spark = document.createElement('div');
-  spark.className = 'hit-spark' + (isGood ? ' good' : '');
-  laneEl.appendChild(spark);
-  setTimeout(() => spark.remove(), 190);
+  const burst = document.createElement('div');
+  burst.className = 'note-burst ' + (isGood ? 'good' : 'perfect');
+  burst.style.top = `${yPos}px`;
+  laneEl.appendChild(burst);
+  setTimeout(() => burst.remove(), 250);
 }
 
 function gameLoop() {
@@ -561,14 +565,21 @@ function gameLoop() {
       if (n.hit) continue;
       const timeDiff = n.time - currentSongTime;
       const yPos = stageHeight - (timeDiff * pixelsPerSec);
+      n.currentY = yPos;
       n.el.style.transform = `translate3d(0, ${yPos}px, 0)`;
 
-      if (timeDiff < -0.145) {
-        n.missed = true;
-        n.el.remove();
-        combo = 0;
-        stats.miss++;
-        updateHUD('MISS', 'judge-miss');
+      // 碰到判定線之後繼續往下掉，透明度線性遞減直到完全透明才判 Miss
+      if (timeDiff < 0) {
+        if (timeDiff < -MISS_WINDOW_SEC) {
+          n.missed = true;
+          n.el.remove();
+          combo = 0;
+          stats.miss++;
+          updateHUD('MISS', 'judge-miss');
+        } else {
+          const opacity = Math.max(0, 1 + (timeDiff / MISS_WINDOW_SEC));
+          n.el.style.opacity = opacity.toFixed(3);
+        }
       }
     } else {
       const endTime = n.time + n.duration;
@@ -577,16 +588,23 @@ function gameLoop() {
         const headDiff = n.time - currentSongTime;
         const headY = stageHeight - (headDiff * pixelsPerSec);
         const holdHeight = n.duration * pixelsPerSec;
+        n.currentY = headY;
 
         n.el.style.transform = `translate3d(0, ${headY - holdHeight}px, 0)`;
         n.el.style.height = `${holdHeight}px`;
 
-        if (headDiff < -0.145) {
-          n.missed = true;
-          n.el.remove();
-          combo = 0;
-          stats.miss++;
-          updateHUD('MISS', 'judge-miss');
+        // 長條頭部超過判定線後同樣繼續往下滑並逐漸透明，直到完全透明才判 Miss
+        if (headDiff < 0) {
+          if (headDiff < -MISS_WINDOW_SEC) {
+            n.missed = true;
+            n.el.remove();
+            combo = 0;
+            stats.miss++;
+            updateHUD('MISS', 'judge-miss');
+          } else {
+            const opacity = Math.max(0, 1 + (headDiff / MISS_WINDOW_SEC));
+            n.el.style.opacity = opacity.toFixed(3);
+          }
         }
       } else {
         const remainingTime = endTime - currentSongTime;
@@ -600,7 +618,7 @@ function gameLoop() {
           score += 1200 + combo * 10;
           updateHUD('PERFECT', 'judge-perfect');
           pulseHitLine();
-          spawnHitSpark(n.lane, false);
+          spawnNoteBurst(n.lane, stageHeight, false);
           continue;
         }
 
@@ -647,6 +665,9 @@ function triggerLaneHit(laneIdx) {
   pulseHitLine();
 
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
+  const stageHeight = document.getElementById('lanes-wrapper').clientHeight;
+  const fallDuration = Math.max(0.26, 2.2 - (noteSpeed - 1) * 0.137);
+  const pixelsPerSec = stageHeight / fallDuration;
 
   let firstPendingNote = null;
   for (let i = 0; i < chartNotes.length; i++) {
@@ -663,6 +684,9 @@ function triggerLaneHit(laneIdx) {
   const absDiff = Math.abs(firstPendingNote.time - currentSongTime);
   if (absDiff > 0.14) return;
 
+  // 計算按鍵被點擊瞬間的精準 Y 座標，讓特效直接從音符身上炸開
+  const hitY = stageHeight - ((firstPendingNote.time - currentSongTime) * pixelsPerSec);
+
   if (firstPendingNote.duration === 0) {
     firstPendingNote.hit = true;
     firstPendingNote.completed = true;
@@ -674,18 +698,19 @@ function triggerLaneHit(laneIdx) {
       stats.perfect++;
       score += 1000 + combo * 10;
       updateHUD('PERFECT', 'judge-perfect');
-      spawnHitSpark(laneIdx, false);
+      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
     } else {
       stats.good++;
       score += 500 + combo * 5;
       updateHUD('GOOD', 'judge-good');
-      spawnHitSpark(laneIdx, true);
+      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
     }
   } else {
     firstPendingNote.hit = true;
     firstPendingNote.holding = true;
     firstPendingNote.releaseStartTime = 0;
     firstPendingNote.lastTickTime = currentSongTime;
+    firstPendingNote.el.style.opacity = '1'; // 若在過線後瞬間接住長條，立刻恢復不透明發光
     firstPendingNote.el.classList.add('holding');
     combo++;
     if (combo > maxCombo) maxCombo = combo;
@@ -694,12 +719,12 @@ function triggerLaneHit(laneIdx) {
       stats.perfect++;
       score += 800;
       updateHUD('HOLD!', 'judge-perfect');
-      spawnHitSpark(laneIdx, false);
+      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
     } else {
       stats.good++;
       score += 400;
       updateHUD('HOLD!', 'judge-good');
-      spawnHitSpark(laneIdx, true);
+      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
     }
   }
 }
@@ -809,8 +834,6 @@ window.addEventListener('touchstart', (e) => {
     if (t.clientY >= touchZoneTop) {
       const laneIdx = getLaneFromClientX(t.clientX);
       if (laneIdx !== -1) {
-        // 關鍵修正：如果該軌道目前已經有一根手指按著，此時第二根新手指落下（雙指同軌輪指），
-        // 依然強制觸發一次 triggerLaneHit，徹底解決高速連打吞音問題！
         const laneAlreadyHeld = touchStates[laneIdx];
         activeTouches.set(t.identifier, laneIdx);
         changed = true;
