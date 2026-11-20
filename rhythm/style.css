@@ -349,7 +349,6 @@ input[type="range"] {
   transform: scale(1.15);
 }
 
-/* 從按鍵位置炸開的判定特效（PERFECT 金黃光 / GOOD 翠綠光） */
 .note-burst {
   position: absolute;
   left: 0;
