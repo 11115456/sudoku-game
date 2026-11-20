@@ -74,7 +74,7 @@ const SONGS = [
 
 let selectedSongIndex = 1; // 預設選中 Lv.3
 let laneCount = 4;
-let noteSpeed = 8;      // 範圍 1 ~ 15
+let noteSpeed = 8;       // 範圍 1 ~ 15
 let stageWidthPct = 100; // 範圍 40% ~ 100%
 let audioOffset = 0;
 
@@ -112,7 +112,6 @@ window.onload = function() {
     renderSongList();
   }
 
-  // 讀取玩家上次自訂的流速與軌道寬度偏好
   const savedSpeed = localStorage.getItem('rhythm_pref_speed');
   const savedWidth = localStorage.getItem('rhythm_pref_width');
   if (savedSpeed) {
@@ -142,7 +141,6 @@ window.onload = function() {
     };
   });
 
-  // 1. 流速滑桿 (1 ~ 15)
   const speedSlider = document.getElementById('speed-slider');
   speedSlider.oninput = () => {
     noteSpeed = parseFloat(speedSlider.value);
@@ -150,7 +148,6 @@ window.onload = function() {
     localStorage.setItem('rhythm_pref_speed', noteSpeed);
   };
 
-  // 2. 軌道寬度滑桿 (40% ~ 100%)
   const widthSlider = document.getElementById('width-slider');
   widthSlider.oninput = () => {
     stageWidthPct = parseInt(widthSlider.value, 10);
@@ -158,7 +155,6 @@ window.onload = function() {
     localStorage.setItem('rhythm_pref_width', stageWidthPct);
   };
 
-  // 3. 延遲滑桿
   const offsetSlider = document.getElementById('offset-slider');
   offsetSlider.oninput = () => {
     audioOffset = parseInt(offsetSlider.value, 10);
@@ -268,7 +264,6 @@ function buildStage() {
   const lanesWrapper = document.getElementById('lanes-wrapper');
   const keysWrapper = document.getElementById('keys-wrapper');
 
-  // 套用玩家自訂的軌道寬度百分比 (40% ~ 100%)
   stageContainer.style.width = `${stageWidthPct}%`;
 
   lanesWrapper.innerHTML = '';
@@ -527,8 +522,6 @@ function gameLoop() {
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
   const stageHeight = document.getElementById('lanes-wrapper').clientHeight;
 
-  // 新版極限流速公式（1 ~ 15 檔）：
-  // Speed 1 = 2.1s 落到底 | Speed 8 = 0.85s | Speed 15 = 0.28s (超高速魔王讀譜)
   const fallDuration = Math.max(0.26, 2.2 - (noteSpeed - 1) * 0.137);
   const pixelsPerSec = stageHeight / fallDuration;
   const eighthSec = (60 / song.bpm) / 2;
@@ -548,7 +541,8 @@ function gameLoop() {
       const yPos = stageHeight - (timeDiff * pixelsPerSec);
       n.el.style.top = `${yPos}px`;
 
-      if (timeDiff < -0.16) {
+      // 超過判定線 145ms 未按才判 Miss（在此之前嚴格鎖定該音符）
+      if (timeDiff < -0.145) {
         n.missed = true;
         n.el.remove();
         combo = 0;
@@ -566,7 +560,7 @@ function gameLoop() {
         n.el.style.top = `${headY - holdHeight}px`;
         n.el.style.height = `${holdHeight}px`;
 
-        if (headDiff < -0.16) {
+        if (headDiff < -0.145) {
           n.missed = true;
           n.el.remove();
           combo = 0;
@@ -617,60 +611,63 @@ function gameLoop() {
   animFrameId = requestAnimationFrame(gameLoop);
 }
 
+// 嚴格 FIFO 順序判定：只允許判定該軌道「最前面尚未處理的第一顆音符」
 function triggerLaneHit(laneIdx) {
   if (!isPlaying || isPaused) return;
   playHitSound(false);
 
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
 
-  let targetNote = null;
-  let minAbsDiff = 999;
-
+  // 1. 找出該軌道時間最早（最靠近底部判定線）且尚未 hit / holding / completed / missed 的第一顆音符
+  let firstPendingNote = null;
   for (let i = 0; i < chartNotes.length; i++) {
     const n = chartNotes[i];
     if (n.lane === laneIdx && !n.hit && !n.holding && !n.completed && !n.missed) {
-      const absDiff = Math.abs(n.time - currentSongTime);
-      if (absDiff < minAbsDiff) {
-        minAbsDiff = absDiff;
-        targetNote = n;
+      if (!firstPendingNote || n.time < firstPendingNote.time) {
+        firstPendingNote = n;
       }
     }
   }
 
-  if (targetNote && minAbsDiff <= 0.15) {
-    if (targetNote.duration === 0) {
-      targetNote.hit = true;
-      targetNote.completed = true;
-      targetNote.el.remove();
-      combo++;
-      if (combo > maxCombo) maxCombo = combo;
+  // 若無待判定音符，或這顆「最前面的音符」尚未進入 ±140ms 判定窗內，直接忽略（絕不跳過它去判定後面那顆）
+  if (!firstPendingNote) return;
 
-      if (minAbsDiff <= 0.075) {
-        stats.perfect++;
-        score += 1000 + combo * 10;
-        updateHUD('PERFECT', 'judge-perfect');
-      } else {
-        stats.good++;
-        score += 500 + combo * 5;
-        updateHUD('GOOD', 'judge-good');
-      }
+  const absDiff = Math.abs(firstPendingNote.time - currentSongTime);
+  if (absDiff > 0.14) return;
+
+  // 2. 判定這顆最前面的音符（±55ms 內皆為 PERFECT，±140ms 內為 GOOD）
+  if (firstPendingNote.duration === 0) {
+    firstPendingNote.hit = true;
+    firstPendingNote.completed = true;
+    firstPendingNote.el.remove();
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+
+    if (absDiff <= 0.055) {
+      stats.perfect++;
+      score += 1000 + combo * 10;
+      updateHUD('PERFECT', 'judge-perfect');
     } else {
-      targetNote.hit = true;
-      targetNote.holding = true;
-      targetNote.lastTickTime = currentSongTime;
-      targetNote.el.classList.add('holding');
-      combo++;
-      if (combo > maxCombo) maxCombo = combo;
+      stats.good++;
+      score += 500 + combo * 5;
+      updateHUD('GOOD', 'judge-good');
+    }
+  } else {
+    firstPendingNote.hit = true;
+    firstPendingNote.holding = true;
+    firstPendingNote.lastTickTime = currentSongTime;
+    firstPendingNote.el.classList.add('holding');
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
 
-      if (minAbsDiff <= 0.085) {
-        stats.perfect++;
-        score += 800;
-        updateHUD('HOLD!', 'judge-perfect');
-      } else {
-        stats.good++;
-        score += 400;
-        updateHUD('HOLD!', 'judge-good');
-      }
+    if (absDiff <= 0.065) {
+      stats.perfect++;
+      score += 800;
+      updateHUD('HOLD!', 'judge-perfect');
+    } else {
+      stats.good++;
+      score += 400;
+      updateHUD('HOLD!', 'judge-good');
     }
   }
 }
@@ -753,16 +750,20 @@ function handleTouchUpdate(e) {
   if (!isPlaying || isPaused) return;
   e.preventDefault();
 
-  // 自動抓取縮放後的實際舞台邊界，確保不管寬度調成 40% 或 100% 觸控都 100% 精準對齊
   const stage = document.getElementById('stage-container');
   const rect = stage.getBoundingClientRect();
   const laneWidth = rect.width / laneCount;
+  const touchZoneTop = window.innerHeight * 0.5;
 
   const newTouchStates = new Array(laneCount).fill(false);
 
   for (let i = 0; i < e.touches.length; i++) {
     const touch = e.touches[i];
-    if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
+    if (
+      touch.clientX >= rect.left &&
+      touch.clientX <= rect.right &&
+      touch.clientY >= touchZoneTop
+    ) {
       const relX = touch.clientX - rect.left;
       const laneIdx = Math.floor(relX / laneWidth);
       if (laneIdx >= 0 && laneIdx < laneCount) {
@@ -780,4 +781,3 @@ stageContainer.addEventListener('touchstart', handleTouchUpdate, { passive: fals
 stageContainer.addEventListener('touchmove', handleTouchUpdate, { passive: false });
 stageContainer.addEventListener('touchend', handleTouchUpdate, { passive: false });
 stageContainer.addEventListener('touchcancel', handleTouchUpdate, { passive: false });
-
