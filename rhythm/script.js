@@ -1,6 +1,5 @@
 const RENDER_URL = "https://sudoku-game-zjff.onrender.com";
 
-// 鍵位配置表（支援 4, 5, 6, 7 軌）
 const KEY_CONFIGS = {
   4: { codes: ['KeyD', 'KeyF', 'KeyJ', 'KeyK'], labels: ['D', 'F', 'J', 'K'], spaceIndex: -1 },
   5: { codes: ['KeyD', 'KeyF', 'Space', 'KeyJ', 'KeyK'], labels: ['D', 'F', 'SP', 'J', 'K'], spaceIndex: 2 },
@@ -8,7 +7,6 @@ const KEY_CONFIGS = {
   7: { codes: ['KeyS', 'KeyD', 'KeyF', 'Space', 'KeyJ', 'KeyK', 'KeyL'], labels: ['S', 'D', 'F', 'SP', 'J', 'K', 'L'], spaceIndex: 3 }
 };
 
-// 曲庫定義（難度 Lv.1 ~ Lv.10）
 const SONGS = [
   {
     id: 'neon_breeze',
@@ -72,10 +70,9 @@ const SONGS = [
   }
 ];
 
-// 街機級寬鬆判定時間窗（徹底解決高流速下差幾毫秒被放生掉下去的問題）
-const HIT_EARLY_WINDOW = 0.26;  // 提前 260ms 內按下皆有效
-const HIT_LATE_WINDOW  = 0.24;  // 過線 240ms 內按下皆有效
-const PERFECT_WINDOW   = 0.085; // ±85ms 為 PERFECT
+const HIT_EARLY_WINDOW = 0.26;
+const HIT_LATE_WINDOW  = 0.24;
+const PERFECT_WINDOW   = 0.085;
 
 let selectedSongIndex = 1;
 let laneCount = 4;
@@ -94,10 +91,11 @@ let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-// Pointer Events 多指獨立追蹤器（支援點擊 + 平板橫向滑入接鍵）
-const activePointers = new Map();
+// 雙引擎去重追蹤器（徹底消除跨設備高速連打複用 ID 導致的同軌吃音）
+const activeTouches = new Map();
 let keyboardStates = [];
 let lanePressedStates = [];
+let lastLaneHitTimestamp = []; // 記錄每軌最近一次觸發時間，防止 touchstart 與 pointerdown 重複觸發
 
 let chartNotes = [];
 let nextSynthStep = 0;
@@ -272,9 +270,10 @@ function buildStage() {
   stageContainer.style.width = `${stageWidthPct}%`;
   lanesWrapper.innerHTML = '';
 
-  activePointers.clear();
+  activeTouches.clear();
   keyboardStates = new Array(laneCount).fill(false);
   lanePressedStates = new Array(laneCount).fill(false);
+  lastLaneHitTimestamp = new Array(laneCount).fill(0);
 
   const spaceIdx = KEY_CONFIGS[laneCount].spaceIndex;
   const labels = KEY_CONFIGS[laneCount].labels;
@@ -303,6 +302,7 @@ function generateChartForSong(song) {
   let laneBusyUntil = new Array(laneCount).fill(0);
   let lastMainLane = 0;
   let stairDir = 1;
+  let lastChordTime = -1;
 
   for (let step = 16; step < totalSteps; step++) {
     const t = step * stepSec;
@@ -357,12 +357,16 @@ function generateChartForSong(song) {
     laneBusyUntil[mainLane] = t + holdDuration;
     freeLanes = freeLanes.filter(l => l !== mainLane);
 
+    // 確保雙押之間至少間隔一拍，避免物理上無法連續雙押跳躍
     let chordChance = 0;
-    if (lv >= 3 && lv <= 5 && isQuarter) chordChance = 0.3;
-    else if (lv >= 6 && lv <= 8 && isEighth) chordChance = 0.45;
-    else if (lv >= 9 && isEighth) chordChance = 0.65;
+    if (t - lastChordTime >= beatSec * 0.9) {
+      if (lv >= 3 && lv <= 5 && isQuarter) chordChance = 0.3;
+      else if (lv >= 6 && lv <= 8 && isEighth) chordChance = 0.45;
+      else if (lv >= 9 && isEighth) chordChance = 0.65;
+    }
 
     if (freeLanes.length > 0 && Math.random() < chordChance) {
+      lastChordTime = t;
       const secondLane = freeLanes[Math.floor(Math.random() * freeLanes.length)];
       let secondHold = 0;
       if (lv >= 8 && isQuarter && Math.random() < 0.25 && t + beatSec < song.duration - 1.5) {
@@ -449,7 +453,7 @@ function togglePause() {
   if (!isPaused) {
     isPaused = true;
     pauseStartTime = audioCtx.currentTime;
-    activePointers.clear();
+    activeTouches.clear();
     updateLaneVisuals();
     document.getElementById('pause-btn').innerText = '▶ 繼續';
   } else {
@@ -655,11 +659,18 @@ function gameLoop() {
 }
 
 // ==========================================
-// 判定觸發器（支援直接點擊 + 平板橫向滑入接鍵）
+// 判定觸發器（含 15ms 雙引擎去重保護，杜絕同軌高速連打漏接）
 // ==========================================
 function triggerLaneHit(laneIdx, isSlideIn = false) {
   if (!isPlaying || isPaused) return;
+
+  // 防重複觸發保護：若同一軌在 18ms 內剛由另一個事件通道（touchstart / pointerdown）觸發過，則略過
+  const nowMs = performance.now();
+  if (!isSlideIn && (nowMs - lastLaneHitTimestamp[laneIdx] < 18)) {
+    return;
+  }
   if (!isSlideIn) {
+    lastLaneHitTimestamp[laneIdx] = nowMs;
     playHitSound(false);
     pulseHitLine();
   }
@@ -677,7 +688,6 @@ function triggerLaneHit(laneIdx, isSlideIn = false) {
     if (n.lane !== laneIdx || n.hit || n.holding || n.completed || n.missed) continue;
 
     const diff = n.time - currentSongTime;
-    // 如果是手指滑入新軌道，只在音符非常接近判定線（±120ms）時才觸發接鍵，避免提前誤掃
     const earlyLimit = isSlideIn ? 0.12 : HIT_EARLY_WINDOW;
     const lateLimit  = isSlideIn ? 0.14 : HIT_LATE_WINDOW;
 
@@ -713,12 +723,12 @@ function triggerLaneHit(laneIdx, isSlideIn = false) {
       stats.perfect++;
       score += 1000 + combo * 10;
       updateHUD('PERFECT', 'judge-perfect', timingStr);
-      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
+      spawnNoteBurst(laneIdx, hitY, false);
     } else {
       stats.good++;
       score += 500 + combo * 5;
       updateHUD('GOOD', 'judge-good', timingStr);
-      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
+      spawnNoteBurst(laneIdx, hitY, true);
     }
   } else {
     bestCandidate.hit = true;
@@ -734,12 +744,12 @@ function triggerLaneHit(laneIdx, isSlideIn = false) {
       stats.perfect++;
       score += 800;
       updateHUD('HOLD!', 'judge-perfect', timingStr);
-      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
+      spawnNoteBurst(laneIdx, hitY, false);
     } else {
       stats.good++;
       score += 400;
       updateHUD('HOLD!', 'judge-good', timingStr);
-      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
+      spawnNoteBurst(laneIdx, hitY, true);
     }
   }
 }
@@ -757,7 +767,7 @@ function updateHUD(judgeStr, cssClass, detailStr = '') {
 
 function endGame() {
   isPlaying = false;
-  activePointers.clear();
+  activeTouches.clear();
   const song = SONGS[selectedSongIndex];
   const recordKey = `${song.id}_${laneCount}K`;
   const oldBest = rhythmScores[recordKey] || 0;
@@ -782,7 +792,7 @@ function endGame() {
 }
 
 // ==========================================
-// 雙端輸入引擎：Pointer Events 獨立多指追蹤 + 滑入接鍵
+// 跨平台無損輸入引擎（Touch Events + Pointer Events 雙重保險 + 封殺長按凍結）
 // ==========================================
 function updateLaneVisuals() {
   const nextStates = new Array(laneCount).fill(false);
@@ -790,7 +800,7 @@ function updateLaneVisuals() {
   for (let i = 0; i < laneCount; i++) {
     if (keyboardStates[i]) nextStates[i] = true;
   }
-  for (const laneIdx of activePointers.values()) {
+  for (const laneIdx of activeTouches.values()) {
     if (laneIdx >= 0 && laneIdx < laneCount) {
       nextStates[laneIdx] = true;
     }
@@ -837,7 +847,64 @@ function getLaneFromClientX(clientX) {
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-// 1. Pointer Down：每根手指擁有獨立硬體 pointerId，無多指合併延遲
+// 1. Touch Events（最底層觸控晶片事件：保證高速同軌連打 100% 觸發，不被複用 ID 吞掉）
+document.addEventListener('touchstart', (e) => {
+  if (!isPlaying || isPaused) return;
+  if (e.target && e.target.closest('.top-bar')) return;
+
+  e.preventDefault(); // 阻斷系統長按手勢凍結
+
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.clientY > 48) {
+      const laneIdx = getLaneFromClientX(t.clientX);
+      if (laneIdx !== -1) {
+        activeTouches.set(`t_${t.identifier}`, laneIdx);
+        triggerLaneHit(laneIdx, false);
+      }
+    }
+  }
+  updateLaneVisuals();
+}, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+  if (!isPlaying || isPaused) return;
+  e.preventDefault();
+
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    const key = `t_${t.identifier}`;
+    if (activeTouches.has(key)) {
+      const newLane = getLaneFromClientX(t.clientX);
+      const oldLane = activeTouches.get(key);
+      if (newLane !== -1 && newLane !== oldLane) {
+        activeTouches.set(key, newLane);
+        triggerLaneHit(newLane, true);
+      }
+    }
+  }
+  updateLaneVisuals();
+}, { passive: false });
+
+function handleTouchEnd(e) {
+  let changed = false;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const key = `t_${e.changedTouches[i].identifier}`;
+    if (activeTouches.has(key)) {
+      activeTouches.delete(key);
+      changed = true;
+    }
+  }
+  if (changed && isPlaying && !isPaused) {
+    e.preventDefault();
+    updateLaneVisuals();
+  }
+}
+
+document.addEventListener('touchend', handleTouchEnd, { passive: false });
+document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+// 2. Pointer Events 備援通道（若特定環境只派發 pointerdown 也能無縫接管）
 document.addEventListener('pointerdown', (e) => {
   if (e.pointerType !== 'touch') return;
   if (!isPlaying || isPaused) return;
@@ -846,38 +913,16 @@ document.addEventListener('pointerdown', (e) => {
   if (e.clientY > 48) {
     const laneIdx = getLaneFromClientX(e.clientX);
     if (laneIdx !== -1) {
-      activePointers.set(e.pointerId, laneIdx);
-      updateLaneVisuals();
       triggerLaneHit(laneIdx, false);
     }
   }
 });
 
-// 2. Pointer Move：平板滑入接鍵（手指快速連打時若微幅掃過相鄰軌道，自動幫你接住該軌音符！）
-document.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'touch') return;
-  if (!isPlaying || isPaused) return;
-  if (!activePointers.has(e.pointerId)) return;
+// 3. 全面封殺長按右鍵選單與選取手勢（徹底防止按住長條超過 300ms 時瀏覽器吞掉另一隻手的點擊）
+document.addEventListener('contextmenu', (e) => {
+  if (isPlaying) e.preventDefault();
+}, { passive: false });
 
-  const newLane = getLaneFromClientX(e.clientX);
-  const oldLane = activePointers.get(e.pointerId);
-
-  if (newLane !== -1 && newLane !== oldLane) {
-    activePointers.set(e.pointerId, newLane);
-    updateLaneVisuals();
-    triggerLaneHit(newLane, true);
-  }
-});
-
-function handlePointerEnd(e) {
-  if (e.pointerType !== 'touch') return;
-  if (activePointers.has(e.pointerId)) {
-    activePointers.delete(e.pointerId);
-    if (isPlaying && !isPaused) {
-      updateLaneVisuals();
-    }
-  }
-}
-
-document.addEventListener('pointerup', handlePointerEnd);
-document.addEventListener('pointercancel', handlePointerEnd);
+document.addEventListener('selectstart', (e) => {
+  if (isPlaying) e.preventDefault();
+}, { passive: false });
