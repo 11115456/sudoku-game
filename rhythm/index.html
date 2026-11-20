@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>CYBER BEAT - 多軌科技音遊</title>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <!-- 頂部狀態列 -->
@@ -37,7 +37,7 @@
       <div id="key-hint" class="key-hint">對應按鍵：D - F - J - K</div>
     </div>
 
-    <!-- 三項玩家自訂微調滑桿：流速(1~15)、軌道寬度(40%~100%)、延遲 -->
+    <!-- 三項玩家自訂微調滑桿 -->
     <div class="sliders-grid">
       <div class="control-group slider-box">
         <label>下落流速：<span id="speed-val" class="highlight-val">8</span> <small>(1~15)</small></label>
@@ -56,7 +56,7 @@
     <button id="start-btn" class="cyber-btn primary">▶ 開始演奏</button>
   </main>
 
-  <!-- 遊戲主舞台 -->
+  <!-- 遊戲主舞台（世界計畫風：無基座單一判定線） -->
   <section id="game-screen" class="game-screen" style="display:none;">
     <div class="hud">
       <div class="song-info-hud" id="hud-song-title">SONG TITLE [Lv.3]</div>
@@ -68,9 +68,12 @@
     </div>
 
     <div id="stage-container" class="stage-container">
+      <!-- 軌道區（一直延伸到判定線） -->
       <div id="lanes-wrapper" class="lanes-wrapper"></div>
-      <div class="hit-line"></div>
-      <div id="keys-wrapper" class="keys-wrapper"></div>
+      <!-- 單一發光判定線 -->
+      <div id="hit-line" class="hit-line"></div>
+      <!-- 判定線下方緩衝區（無實體按鍵框，保留手指按壓空間） -->
+      <div class="bottom-buffer"></div>
     </div>
   </section>
 
@@ -91,6 +94,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=7"></script>
+  <script src="script.js?v=8"></script>
 </body>
 </html>
