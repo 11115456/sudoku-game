@@ -286,9 +286,9 @@ input[type="range"] {
   width: 100%;
   height: 100%;
   background: rgba(5, 10, 20, 0.94);
-  border-left: 2px solid #00f0ff;
-  border-right: 2px solid #00f0ff;
-  box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
+  border-left: 2px solid rgba(0, 240, 255, 0.6);
+  border-right: 2px solid rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
   display: flex;
   flex-direction: column;
 }
@@ -300,7 +300,7 @@ input[type="range"] {
   top: 50%;
   left: 0;
   width: 100%;
-  border-top: 1px dashed rgba(0, 240, 255, 0.22);
+  border-top: 1px dashed rgba(0, 240, 255, 0.18);
   pointer-events: none;
   z-index: 8;
 }
@@ -315,31 +315,58 @@ input[type="range"] {
 .lane {
   flex: 1;
   position: relative;
-  border-right: 1px solid rgba(0, 240, 255, 0.2);
-  background: linear-gradient(180deg, rgba(5,10,20,0.6) 0%, rgba(10,25,47,0.85) 100%);
+  border-right: 1px solid rgba(0, 240, 255, 0.14);
+  background: linear-gradient(180deg, rgba(5,10,20,0.4) 0%, rgba(10,25,47,0.75) 100%);
+  transition: background 0.05s;
 }
 
 .lane:last-child {
   border-right: none;
 }
 
+/* 世界計畫風：按下時整條軌道向上的霓虹光束 (Key Beam) */
 .lane.active {
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 10%, rgba(0, 240, 255, 0.35) 100%);
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 15%, rgba(0, 240, 255, 0.42) 100%);
+  box-shadow: inset 0 -12px 24px rgba(0, 240, 255, 0.45);
 }
 
 .lane.space-lane.active {
-  background: linear-gradient(180deg, rgba(255, 0, 128, 0) 10%, rgba(255, 0, 128, 0.35) 100%);
+  background: linear-gradient(180deg, rgba(255, 0, 128, 0) 15%, rgba(255, 0, 128, 0.42) 100%);
+  box-shadow: inset 0 -12px 24px rgba(255, 0, 128, 0.45);
+}
+
+/* 軌道底部極淡的鍵位提示字樣（取代實體方塊按鍵） */
+.lane-key-watermark {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: rgba(0, 240, 255, 0.25);
+  pointer-events: none;
+  transition: color 0.06s, transform 0.06s;
+}
+
+.lane.space-lane .lane-key-watermark {
+  color: rgba(255, 64, 129, 0.3);
+}
+
+.lane.active .lane-key-watermark {
+  color: rgba(255, 255, 255, 0.9);
+  transform: scale(1.15);
 }
 
 /* 單點音符 (Tap Note) */
 .note {
   position: absolute;
-  left: 6%;
-  width: 88%;
-  height: 20px;
+  left: 4%;
+  width: 92%;
+  height: 18px;
   background: linear-gradient(90deg, #00b8d4, #84ffff, #00b8d4);
   border: 1.5px solid #ffffff;
-  border-radius: 4px;
+  border-radius: 3px;
   box-shadow: 0 0 12px #00f0ff;
   transform: translateY(-50%);
   pointer-events: none;
@@ -354,21 +381,21 @@ input[type="range"] {
 /* 長條音符 (Hold Note) */
 .hold-note {
   position: absolute;
-  left: 10%;
-  width: 80%;
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0.25) 0%, rgba(0, 240, 255, 0.75) 100%);
+  left: 8%;
+  width: 84%;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.25) 0%, rgba(0, 240, 255, 0.78) 100%);
   border-left: 2px solid #00f0ff;
   border-right: 2px solid #00f0ff;
   border-top: 3px solid #84ffff;
   border-bottom: 5px solid #ffffff;
-  border-radius: 4px;
+  border-radius: 3px;
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
   pointer-events: none;
   z-index: 4;
 }
 
 .hold-note.space-note {
-  background: linear-gradient(180deg, rgba(255, 64, 129, 0.25) 0%, rgba(255, 64, 129, 0.75) 100%);
+  background: linear-gradient(180deg, rgba(255, 64, 129, 0.25) 0%, rgba(255, 64, 129, 0.78) 100%);
   border-left-color: #ff4081;
   border-right-color: #ff4081;
   border-top-color: #ff80ab;
@@ -385,55 +412,28 @@ input[type="range"] {
   box-shadow: 0 0 20px #ffffff, 0 0 30px #ff4081;
 }
 
-/* 判定線 */
+/* 世界計畫風：單一發光判定線 */
 .hit-line {
+  position: relative;
   height: 4px;
   width: 100%;
   background: #ffffff;
-  box-shadow: 0 0 12px #00f0ff, 0 0 24px #00f0ff;
-  z-index: 10;
+  box-shadow: 0 0 10px #00f0ff, 0 0 22px #00f0ff, 0 0 36px rgba(0, 240, 255, 0.8);
+  z-index: 12;
+  transition: box-shadow 0.05s, transform 0.05s;
 }
 
-/* 底部觸控按鍵區 */
-.keys-wrapper {
-  height: 115px;
-  display: flex;
-  background: #030912;
-  padding: 5px 6px;
-  gap: 5px;
-  z-index: 10;
+.hit-line.pulse {
+  box-shadow: 0 0 16px #ffffff, 0 0 32px #00f0ff, 0 0 50px #00f0ff;
+  transform: scaleY(1.4);
 }
 
-.key-pad {
-  flex: 1;
-  margin: 0;
-  background: linear-gradient(180deg, #0d233a 0%, #050d1a 100%);
-  border: 1.5px solid rgba(0, 240, 255, 0.65);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.15rem;
-  color: rgba(0, 240, 255, 0.85);
-  transition: transform 0.04s;
-}
-
-.key-pad.space-key {
-  border-color: rgba(255, 64, 129, 0.75);
-  color: rgba(255, 128, 171, 0.95);
-}
-
-.key-pad.active {
-  background: linear-gradient(180deg, #ffffff 0%, #00f0ff 40%, #006064 100%);
-  color: #02060d;
-  box-shadow: 0 0 18px #00f0ff;
-  transform: scale(0.95);
-}
-
-.key-pad.space-key.active {
-  background: linear-gradient(180deg, #ffffff 0%, #ff4081 40%, #880e4f 100%);
-  box-shadow: 0 0 18px #ff4081;
+/* 判定線下方無基座緩衝區（給手指自然的觸控餘裕，且能看清剛過線的音符） */
+.bottom-buffer {
+  height: 75px;
+  width: 100%;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.08) 0%, rgba(2, 6, 13, 0.95) 100%);
+  pointer-events: none;
 }
 
 /* 結算視窗 */
