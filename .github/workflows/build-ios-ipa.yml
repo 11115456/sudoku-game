@@ -1,0 +1,75 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mobile-app/**'
+      - '.github/workflows/build-ios-ipa.yml'
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Capacitor and add iOS platform
+        working-directory: mobile-app
+        run: |
+          mkdir -p www
+          echo "<h1>Loading...</h1>" > www/index.html
+          npm install
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Disable iOS WebView Gesture Touch Delay
+        working-directory: mobile-app
+        run: |
+          python3 -c '
+          path = "ios/App/App/AppDelegate.swift"
+          with open(path, "r") as f:
+              code = f.read()
+          patch = """
+                  if let rootVC = window?.rootViewController,
+                     let scrollView = rootVC.view.subviews.first(where: { $0 is UIScrollView }) as? UIScrollView {
+                      scrollView.delaysContentTouches = false
+                  }
+                  window?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
+                  return true
+          """
+          code = code.replace("return true", patch, 1)
+          with open(path, "w") as f:
+              f.write(code)
+          '
+
+      - name: Build Unsigned .xcarchive
+        working-directory: mobile-app
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/App.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package into Unsigned IPA
+        working-directory: mobile-app
+        run: |
+          mkdir -p Payload
+          cp -r build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -r CyberBeat.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyberBeat-iOS-IPA
+          path: mobile-app/CyberBeat.ipa
