@@ -89,6 +89,8 @@ let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
+// 獨立多點觸控追蹤器：key = touch.identifier, value = 該手指鎖定的軌道編號
+const activeTouches = new Map();
 let keyboardStates = [];
 let touchStates = [];
 let combinedStates = [];
@@ -269,6 +271,7 @@ function buildStage() {
   lanesWrapper.innerHTML = '';
   keysWrapper.innerHTML = '';
 
+  activeTouches.clear();
   keyboardStates = new Array(laneCount).fill(false);
   touchStates = new Array(laneCount).fill(false);
   combinedStates = new Array(laneCount).fill(false);
@@ -398,6 +401,7 @@ function createNoteObject(time, duration, laneIdx) {
     lane: laneIdx,
     hit: false,
     holding: false,
+    releaseStartTime: 0, // 記錄長條途中鬆手的時間，給予 110ms 觸控防抖寬限
     completed: false,
     missed: false,
     lastTickTime: time,
@@ -445,6 +449,7 @@ function togglePause() {
   if (!isPaused) {
     isPaused = true;
     pauseStartTime = audioCtx.currentTime;
+    activeTouches.clear();
     document.getElementById('pause-btn').innerText = '▶ 繼續';
   } else {
     isPaused = false;
@@ -541,7 +546,6 @@ function gameLoop() {
       const yPos = stageHeight - (timeDiff * pixelsPerSec);
       n.el.style.top = `${yPos}px`;
 
-      // 超過判定線 145ms 未按才判 Miss（在此之前嚴格鎖定該音符）
       if (timeDiff < -0.145) {
         n.missed = true;
         n.el.remove();
@@ -570,7 +574,8 @@ function gameLoop() {
       } else {
         const remainingTime = endTime - currentSongTime;
 
-        if (remainingTime <= 0.08) {
+        // 1. 尾部接近判定線（允許提前 100ms 放開）直接判定完成
+        if (remainingTime <= 0.1) {
           n.completed = true;
           n.el.remove();
           combo++;
@@ -581,15 +586,24 @@ function gameLoop() {
           continue;
         }
 
+        // 2. 檢查該軌道是否仍被按住（加入 110ms 觸控防抖寬限，防止多指連打時瞬斷誤判 Miss）
         if (!combinedStates[n.lane]) {
-          n.missed = true;
-          n.el.remove();
-          combo = 0;
-          stats.miss++;
-          updateHUD('MISS', 'judge-miss');
-          continue;
+          if (n.releaseStartTime === 0) {
+            n.releaseStartTime = currentSongTime;
+          } else if (currentSongTime - n.releaseStartTime > 0.11) {
+            n.missed = true;
+            n.el.remove();
+            combo = 0;
+            stats.miss++;
+            updateHUD('MISS', 'judge-miss');
+            continue;
+          }
+        } else {
+          // 只要在寬限期內重新壓住，重置計時器
+          n.releaseStartTime = 0;
         }
 
+        // 3. 持續按住中：尾部縮短貼齊判定線
         const currentHeight = Math.max(0, remainingTime * pixelsPerSec);
         n.el.style.top = `${stageHeight - currentHeight}px`;
         n.el.style.height = `${currentHeight}px`;
@@ -618,7 +632,6 @@ function triggerLaneHit(laneIdx) {
 
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
 
-  // 1. 找出該軌道時間最早（最靠近底部判定線）且尚未 hit / holding / completed / missed 的第一顆音符
   let firstPendingNote = null;
   for (let i = 0; i < chartNotes.length; i++) {
     const n = chartNotes[i];
@@ -629,13 +642,11 @@ function triggerLaneHit(laneIdx) {
     }
   }
 
-  // 若無待判定音符，或這顆「最前面的音符」尚未進入 ±140ms 判定窗內，直接忽略（絕不跳過它去判定後面那顆）
   if (!firstPendingNote) return;
 
   const absDiff = Math.abs(firstPendingNote.time - currentSongTime);
   if (absDiff > 0.14) return;
 
-  // 2. 判定這顆最前面的音符（±55ms 內皆為 PERFECT，±140ms 內為 GOOD）
   if (firstPendingNote.duration === 0) {
     firstPendingNote.hit = true;
     firstPendingNote.completed = true;
@@ -655,6 +666,7 @@ function triggerLaneHit(laneIdx) {
   } else {
     firstPendingNote.hit = true;
     firstPendingNote.holding = true;
+    firstPendingNote.releaseStartTime = 0;
     firstPendingNote.lastTickTime = currentSongTime;
     firstPendingNote.el.classList.add('holding');
     combo++;
@@ -682,6 +694,7 @@ function updateHUD(judgeStr, cssClass) {
 
 function endGame() {
   isPlaying = false;
+  activeTouches.clear();
   const song = SONGS[selectedSongIndex];
   const recordKey = `${song.id}_${laneCount}K`;
   const oldBest = rhythmScores[recordKey] || 0;
@@ -705,7 +718,9 @@ function endGame() {
   document.getElementById('result-modal').style.display = 'flex';
 }
 
-// 雙端輸入同步引擎（PC 鍵盤 + 平板/手機多點觸控）
+// ==========================================
+// 雙端輸入同步引擎（獨立 Touch ID 追蹤 + 鍵盤同步）
+// ==========================================
 function syncAllInputs() {
   for (let i = 0; i < laneCount; i++) {
     const isNowPressed = keyboardStates[i] || touchStates[i];
@@ -746,38 +761,95 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-function handleTouchUpdate(e) {
-  if (!isPlaying || isPaused) return;
-  e.preventDefault();
-
+// 根據 X 座標計算對應軌道
+function getLaneFromClientX(clientX) {
   const stage = document.getElementById('stage-container');
   const rect = stage.getBoundingClientRect();
+  if (clientX < rect.left || clientX > rect.right) return -1;
   const laneWidth = rect.width / laneCount;
+  const laneIdx = Math.floor((clientX - rect.left) / laneWidth);
+  return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
+}
+
+// 由 activeTouches Map 重新彙整各軌道是否被觸控按住
+function rebuildTouchStatesFromMap() {
+  const nextStates = new Array(laneCount).fill(false);
+  for (const laneIdx of activeTouches.values()) {
+    if (laneIdx >= 0 && laneIdx < laneCount) {
+      nextStates[laneIdx] = true;
+    }
+  }
+  touchStates = nextStates;
+  syncAllInputs();
+}
+
+// 1. 手指按下：為該 touch.identifier 註冊獨立軌道鎖定
+window.addEventListener('touchstart', (e) => {
+  if (!isPlaying || isPaused) return;
   const touchZoneTop = window.innerHeight * 0.5;
+  let changed = false;
 
-  const newTouchStates = new Array(laneCount).fill(false);
-
-  for (let i = 0; i < e.touches.length; i++) {
-    const touch = e.touches[i];
-    if (
-      touch.clientX >= rect.left &&
-      touch.clientX <= rect.right &&
-      touch.clientY >= touchZoneTop
-    ) {
-      const relX = touch.clientX - rect.left;
-      const laneIdx = Math.floor(relX / laneWidth);
-      if (laneIdx >= 0 && laneIdx < laneCount) {
-        newTouchStates[laneIdx] = true;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.clientY >= touchZoneTop) {
+      const laneIdx = getLaneFromClientX(t.clientX);
+      if (laneIdx !== -1) {
+        activeTouches.set(t.identifier, laneIdx);
+        changed = true;
       }
     }
   }
 
-  touchStates = newTouchStates;
-  syncAllInputs();
+  if (changed) {
+    e.preventDefault();
+    rebuildTouchStatesFromMap();
+  }
+}, { passive: false });
+
+// 2. 手指移動：僅更新移動的那根手指（不影響其他按住長條的手指）
+window.addEventListener('touchmove', (e) => {
+  if (!isPlaying || isPaused) return;
+  const touchZoneTop = window.innerHeight * 0.5;
+  let changed = false;
+
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (activeTouches.has(t.identifier)) {
+      // 如果手指滑出下半部防誤觸區太遠（超過 40% 高度），才解除該手指
+      if (t.clientY < window.innerHeight * 0.4) {
+        activeTouches.delete(t.identifier);
+        changed = true;
+      } else {
+        const newLane = getLaneFromClientX(t.clientX);
+        if (newLane !== -1 && activeTouches.get(t.identifier) !== newLane) {
+          activeTouches.set(t.identifier, newLane);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if (changed) {
+    e.preventDefault();
+    rebuildTouchStatesFromMap();
+  }
+}, { passive: false });
+
+// 3. 手指抬起或中斷：精準移除抬起的那一根 identifier，其餘按住長條的手指完全不受影響
+function handleTouchRelease(e) {
+  let changed = false;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (activeTouches.has(t.identifier)) {
+      activeTouches.delete(t.identifier);
+      changed = true;
+    }
+  }
+  if (changed && isPlaying && !isPaused) {
+    e.preventDefault();
+    rebuildTouchStatesFromMap();
+  }
 }
 
-const stageContainer = document.getElementById('stage-container');
-stageContainer.addEventListener('touchstart', handleTouchUpdate, { passive: false });
-stageContainer.addEventListener('touchmove', handleTouchUpdate, { passive: false });
-stageContainer.addEventListener('touchend', handleTouchUpdate, { passive: false });
-stageContainer.addEventListener('touchcancel', handleTouchUpdate, { passive: false });
+window.addEventListener('touchend', handleTouchRelease, { passive: false });
+window.addEventListener('touchcancel', handleTouchRelease, { passive: false });
