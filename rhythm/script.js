@@ -86,17 +86,16 @@ let rhythmScores = {};
 let isPlaying = false;
 let isPaused = false;
 let audioCtx = null;
-let hitSoundBuffer = null; // 預先渲染的打擊音效 Buffer，零延遲播放
+let hitSoundBuffer = null;
 let songStartTime = 0;
 let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-// 追蹤每根手指目前所在的軌道 (touchKey -> laneIdx)
+// 追蹤每根手指目前所在的軌道 (touchId -> laneIdx)
 const activeTouches = new Map();
 let keyboardStates = [];
 let lanePressedStates = [];
-let lastLaneHitTimestamp = [];
 let stageRectCache = null;
 
 let chartNotes = [];
@@ -183,12 +182,12 @@ window.onload = function() {
 
   window.addEventListener('resize', updateStageRectCache);
 
-  // 直接將觸控監聽器綁定在舞台容器本身，避開 document 全局冒泡喚醒延遲
-  const stageEl = document.getElementById('stage-container');
-  stageEl.addEventListener('touchstart', onStageTouchStart, { passive: false });
-  stageEl.addEventListener('touchmove', onStageTouchMove, { passive: false });
-  stageEl.addEventListener('touchend', onStageTouchEnd, { passive: false });
-  stageEl.addEventListener('touchcancel', onStageTouchEnd, { passive: false });
+  // 所有觸控全部綁定在全螢幕靜態透明護盾層 (#touch-shield)，絕不因底下音符移動或隱藏而丟失目標節點
+  const shieldEl = document.getElementById('touch-shield');
+  shieldEl.addEventListener('touchstart', onShieldTouchStart, { passive: false });
+  shieldEl.addEventListener('touchmove', onShieldTouchMove, { passive: false });
+  shieldEl.addEventListener('touchend', onShieldTouchEnd, { passive: false });
+  shieldEl.addEventListener('touchcancel', onShieldTouchEnd, { passive: false });
 };
 
 function updateStageRectCache() {
@@ -306,7 +305,6 @@ function buildStage() {
   activeTouches.clear();
   keyboardStates = new Array(laneCount).fill(false);
   lanePressedStates = new Array(laneCount).fill(false);
-  lastLaneHitTimestamp = new Array(laneCount).fill(0);
 
   const spaceIdx = KEY_CONFIGS[laneCount].spaceIndex;
   const labels = KEY_CONFIGS[laneCount].labels;
@@ -439,13 +437,20 @@ function createNoteObject(time, duration, laneIdx) {
     lane: laneIdx,
     hit: false,
     holding: false,
-    holdTouchId: null, // 獨立綁定按住此長條的手指 ID，避免被同軌其他手指誤撐
+    holdTouchId: null,
     releaseStartTime: 0,
     completed: false,
     missed: false,
     lastTickTime: time,
     el: noteEl
   });
+}
+
+// 零 DOM 刪除：僅隱藏節點，不改動 DOM 樹結構，徹底防止觸控事件在節點被移除瞬間丟失
+function hideNoteEl(el) {
+  if (el && el.style.display !== 'none') {
+    el.style.display = 'none';
+  }
 }
 
 function startGame() {
@@ -548,7 +553,6 @@ function playSongSynth(song, stepIndex, time) {
   synth.stop(time + stepSec * 0.95);
 }
 
-// 零延遲 AudioBuffer 播放（取代每次建立 Oscillator 的主執行緒阻塞）
 function playHitSound() {
   if (!audioCtx || !hitSoundBuffer) return;
   const src = audioCtx.createBufferSource();
@@ -574,7 +578,9 @@ function spawnNoteBurst(laneIdx, yPos, isGood = false) {
   burst.className = 'note-burst ' + (isGood ? 'good' : 'perfect');
   burst.style.top = `${yPos}px`;
   laneEl.appendChild(burst);
-  setTimeout(() => burst.remove(), 230);
+  setTimeout(() => {
+    burst.style.display = 'none';
+  }, 230);
 }
 
 function gameLoop() {
@@ -606,7 +612,7 @@ function gameLoop() {
       if (timeDiff < 0) {
         if (timeDiff < -HIT_LATE_WINDOW) {
           n.missed = true;
-          n.el.remove();
+          hideNoteEl(n.el);
           combo = 0;
           stats.miss++;
           updateHUD('MISS', 'judge-miss', `LATE +${Math.round(-timeDiff * 1000)}ms`);
@@ -629,7 +635,7 @@ function gameLoop() {
         if (headDiff < 0) {
           if (headDiff < -HIT_LATE_WINDOW) {
             n.missed = true;
-            n.el.remove();
+            hideNoteEl(n.el);
             combo = 0;
             stats.miss++;
             updateHUD('MISS', 'judge-miss', `HOLD LATE +${Math.round(-headDiff * 1000)}ms`);
@@ -643,7 +649,7 @@ function gameLoop() {
 
         if (remainingTime <= 0.08) {
           n.completed = true;
-          n.el.remove();
+          hideNoteEl(n.el);
           combo++;
           if (combo > maxCombo) maxCombo = combo;
           stats.perfect++;
@@ -654,7 +660,6 @@ function gameLoop() {
           continue;
         }
 
-        // 精準檢查綁定這根長條的特定手指（或鍵盤按鍵）是否仍在該軌道上
         let isStillHolding = keyboardStates[n.lane];
         if (!isStillHolding && n.holdTouchId !== null) {
           const fingerLane = activeTouches.get(n.holdTouchId);
@@ -668,7 +673,7 @@ function gameLoop() {
             n.releaseStartTime = currentSongTime;
           } else if (currentSongTime - n.releaseStartTime > 0.14) {
             n.missed = true;
-            n.el.remove();
+            hideNoteEl(n.el);
             combo = 0;
             stats.miss++;
             updateHUD('MISS', 'judge-miss', 'HOLD RELEASED');
@@ -747,7 +752,7 @@ function triggerLaneHit(laneIdx, isSlideIn = false, touchId = null) {
   if (bestCandidate.duration === 0) {
     bestCandidate.hit = true;
     bestCandidate.completed = true;
-    bestCandidate.el.remove();
+    hideNoteEl(bestCandidate.el);
     combo++;
     if (combo > maxCombo) maxCombo = combo;
 
@@ -765,7 +770,7 @@ function triggerLaneHit(laneIdx, isSlideIn = false, touchId = null) {
   } else {
     bestCandidate.hit = true;
     bestCandidate.holding = true;
-    bestCandidate.holdTouchId = touchId; // 鎖定是哪一根手指按中這根長條
+    bestCandidate.holdTouchId = touchId;
     bestCandidate.releaseStartTime = 0;
     bestCandidate.lastTickTime = currentSongTime;
     bestCandidate.el.style.opacity = '1';
@@ -878,8 +883,8 @@ function getLaneFromClientX(clientX) {
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-// 直接綁定在 #stage-container 上的零延遲多點觸控處理器
-function onStageTouchStart(e) {
+// 靜態護盾層專屬多點觸控處理器
+function onShieldTouchStart(e) {
   if (!isPlaying || isPaused) return;
   e.preventDefault();
 
@@ -894,7 +899,7 @@ function onStageTouchStart(e) {
   updateLaneVisuals();
 }
 
-function onStageTouchMove(e) {
+function onShieldTouchMove(e) {
   if (!isPlaying || isPaused) return;
   e.preventDefault();
 
@@ -912,7 +917,7 @@ function onStageTouchMove(e) {
   updateLaneVisuals();
 }
 
-function onStageTouchEnd(e) {
+function onShieldTouchEnd(e) {
   let changed = false;
   for (let i = 0; i < e.changedTouches.length; i++) {
     const id = e.changedTouches[i].identifier;
