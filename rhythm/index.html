@@ -2,9 +2,9 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>CYBER BEAT - 多軌科技音遊</title>
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <!-- 頂部狀態列 -->
@@ -73,6 +73,9 @@
       <div id="hit-line" class="hit-line"></div>
       <div class="bottom-buffer"></div>
     </div>
+
+    <!-- 全螢幕靜態觸控捕捉護盾層：永遠靜止、絕不增刪 DOM，確保所有手指點擊 100% 命中同一目標 -->
+    <div id="touch-shield" class="touch-shield"></div>
   </section>
 
   <!-- 結算視窗 -->
@@ -92,6 +95,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=16"></script>
+  <script src="script.js?v=17"></script>
 </body>
 </html>
