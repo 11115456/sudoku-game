@@ -72,9 +72,9 @@ const SONGS = [
   }
 ];
 
-const HIT_EARLY_WINDOW = 0.16;  // 提前按下容錯 160ms
-const HIT_LATE_WINDOW  = 0.15;  // 過線延遲容錯 150ms（與過線淡出時間完全一致，絕無真空期）
-const PERFECT_WINDOW   = 0.06;  // ±60ms 為 PERFECT
+const HIT_EARLY_WINDOW = 0.175; // 提前按下容錯 175ms
+const HIT_LATE_WINDOW  = 0.165; // 過線延遲容錯 165ms
+const PERFECT_WINDOW   = 0.065; // ±65ms 為 PERFECT
 
 let selectedSongIndex = 1; // 預設選中 Lv.3
 let laneCount = 4;
@@ -93,7 +93,7 @@ let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-// 獨立多點觸控追蹤器（每根手指按下即鎖定該軌道直到抬起，絕不因微滑漂移吃音）
+// 獨立多點觸控追蹤器
 const activeTouches = new Map();
 let keyboardStates = [];
 let lanePressedStates = [];
@@ -326,7 +326,6 @@ function generateChartForSong(song) {
 
     let freeLanes = [];
     for (let l = 0; l < laneCount; l++) {
-      // 確保同軌音符至少保留 160ms 以上間隔，避免重疊無法辨識
       if (t >= laneBusyUntil[l] + 0.16) freeLanes.push(l);
     }
     if (freeLanes.length === 0) continue;
@@ -429,7 +428,7 @@ function startGame() {
   combo = 0;
   maxCombo = 0;
   stats = { perfect: 0, good: 0, miss: 0 };
-  updateHUD('READY', '');
+  updateHUD('READY', '', '');
 
   buildStage();
   generateChartForSong(song);
@@ -531,7 +530,6 @@ function pulseHitLine() {
   }, 60);
 }
 
-// 從按鍵（音符當下位置）炸開判定光效：PERFECT 為黃色光，GOOD 為綠色光
 function spawnNoteBurst(laneIdx, yPos, isGood = false) {
   const laneEl = document.getElementById(`lane-${laneIdx}`);
   if (!laneEl) return;
@@ -540,6 +538,15 @@ function spawnNoteBurst(laneIdx, yPos, isGood = false) {
   burst.style.top = `${yPos}px`;
   laneEl.appendChild(burst);
   setTimeout(() => burst.remove(), 250);
+}
+
+function spawnTouchRipple(clientX, clientY) {
+  const r = document.createElement('div');
+  r.className = 'touch-ripple';
+  r.style.left = `${clientX}px`;
+  r.style.top = `${clientY}px`;
+  document.body.appendChild(r);
+  setTimeout(() => r.remove(), 220);
 }
 
 function gameLoop() {
@@ -568,14 +575,13 @@ function gameLoop() {
       const yPos = stageHeight - (timeDiff * pixelsPerSec);
       n.el.style.transform = `translate3d(0, ${yPos}px, 0)`;
 
-      // 碰到判定線之後繼續往下掉，透明度線性遞減直到完全透明才判 Miss
       if (timeDiff < 0) {
         if (timeDiff < -HIT_LATE_WINDOW) {
           n.missed = true;
           n.el.remove();
           combo = 0;
           stats.miss++;
-          updateHUD('MISS', 'judge-miss');
+          updateHUD('MISS', 'judge-miss', `LATE +${Math.round(-timeDiff * 1000)}ms`);
         } else {
           const opacity = Math.max(0, 1 + (timeDiff / HIT_LATE_WINDOW));
           n.el.style.opacity = opacity.toFixed(3);
@@ -598,7 +604,7 @@ function gameLoop() {
             n.el.remove();
             combo = 0;
             stats.miss++;
-            updateHUD('MISS', 'judge-miss');
+            updateHUD('MISS', 'judge-miss', `HOLD LATE +${Math.round(-headDiff * 1000)}ms`);
           } else {
             const opacity = Math.max(0, 1 + (headDiff / HIT_LATE_WINDOW));
             n.el.style.opacity = opacity.toFixed(3);
@@ -614,7 +620,7 @@ function gameLoop() {
           if (combo > maxCombo) maxCombo = combo;
           stats.perfect++;
           score += 1200 + combo * 10;
-          updateHUD('PERFECT', 'judge-perfect');
+          updateHUD('PERFECT', 'judge-perfect', 'HOLD CLEAR');
           pulseHitLine();
           spawnNoteBurst(n.lane, stageHeight, false);
           continue;
@@ -623,12 +629,12 @@ function gameLoop() {
         if (!lanePressedStates[n.lane]) {
           if (n.releaseStartTime === 0) {
             n.releaseStartTime = currentSongTime;
-          } else if (currentSongTime - n.releaseStartTime > 0.12) {
+          } else if (currentSongTime - n.releaseStartTime > 0.13) {
             n.missed = true;
             n.el.remove();
             combo = 0;
             stats.miss++;
-            updateHUD('MISS', 'judge-miss');
+            updateHUD('MISS', 'judge-miss', 'HOLD RELEASED');
             continue;
           }
         } else {
@@ -657,9 +663,29 @@ function gameLoop() {
 }
 
 // ==========================================
-// 零吃音判定引擎：在所有候選音符中精準鎖定時間最近的一顆
+// 零吃音判定引擎（含：雙押同步優先 + 鄰近軌道自動吸附）
 // ==========================================
-function triggerLaneHit(laneIdx) {
+function findCandidateInLane(targetLane, currentSongTime) {
+  let bestCandidate = null;
+  let bestAbsDiff = Infinity;
+
+  for (let i = 0; i < chartNotes.length; i++) {
+    const n = chartNotes[i];
+    if (n.lane !== targetLane || n.hit || n.holding || n.completed || n.missed) continue;
+
+    const diff = n.time - currentSongTime;
+    if (diff >= -HIT_LATE_WINDOW && diff <= HIT_EARLY_WINDOW) {
+      const absDiff = Math.abs(diff);
+      if (absDiff < bestAbsDiff) {
+        bestAbsDiff = absDiff;
+        bestCandidate = n;
+      }
+    }
+  }
+  return bestCandidate;
+}
+
+function triggerLaneHit(laneIdx, touchId = null) {
   if (!isPlaying || isPaused) return;
   playHitSound(false);
   pulseHitLine();
@@ -669,27 +695,46 @@ function triggerLaneHit(laneIdx) {
   const fallDuration = Math.max(0.26, 2.2 - (noteSpeed - 1) * 0.137);
   const pixelsPerSec = stageHeight / fallDuration;
 
-  // 篩選出該軌道「所有落在有效時間窗口 [-HIT_LATE_WINDOW, +HIT_EARLY_WINDOW] 內」的音符
-  // 徹底解決被前一顆剛過線的音符卡死 FIFO 隊列的吃音問題！
-  let bestCandidate = null;
-  let bestAbsDiff = Infinity;
+  // 1. 優先檢查正中點擊的軌道
+  let matchedLane = laneIdx;
+  let bestCandidate = findCandidateInLane(laneIdx, currentSongTime);
 
-  for (let i = 0; i < chartNotes.length; i++) {
-    const n = chartNotes[i];
-    if (n.lane !== laneIdx || n.hit || n.holding || n.completed || n.missed) continue;
+  // 2. 若該軌道目前沒有音符（例如平板雙押時手指微偏 5px 點到隔壁空軌），
+  //    自動檢查左右相鄰 1 軌是否有正壓在判定線上的音符並予以吸附！
+  if (!bestCandidate) {
+    const neighbors = [laneIdx - 1, laneIdx + 1].filter(l => l >= 0 && l < laneCount);
+    let bestNeighborNote = null;
+    let bestNeighborDiff = Infinity;
 
-    const diff = n.time - currentSongTime; // 正值 = 提早按，負值 = 過線後按
-    if (diff >= -HIT_LATE_WINDOW && diff <= HIT_EARLY_WINDOW) {
-      const absDiff = Math.abs(diff);
-      if (absDiff < bestAbsDiff) {
-        bestAbsDiff = absDiff;
-        bestCandidate = n;
+    for (const nLane of neighbors) {
+      const cand = findCandidateInLane(nLane, currentSongTime);
+      if (cand) {
+        const d = Math.abs(cand.time - currentSongTime);
+        if (d < bestNeighborDiff) {
+          bestNeighborDiff = d;
+          bestNeighborNote = cand;
+          matchedLane = nLane;
+        }
       }
+    }
+    bestCandidate = bestNeighborNote;
+
+    // 若發生鄰近軌道吸附，同步更新該手指鎖定的軌道（確保長條能正確按住）
+    if (bestCandidate && touchId !== null && activeTouches.has(touchId)) {
+      activeTouches.set(touchId, matchedLane);
+      updateLaneVisuals();
     }
   }
 
-  if (!bestCandidate) return;
+  if (!bestCandidate) {
+    const label = KEY_CONFIGS[laneCount].labels[laneIdx];
+    document.getElementById('timing-detail').innerText = `[${label}] 空點 (無音符)`;
+    return;
+  }
 
+  const signedDiffMs = Math.round((bestCandidate.time - currentSongTime) * 1000);
+  const absDiff = Math.abs(bestCandidate.time - currentSongTime);
+  const timingStr = signedDiffMs > 0 ? `EARLY -${signedDiffMs}ms` : `LATE +${Math.abs(signedDiffMs)}ms`;
   const hitY = stageHeight - ((bestCandidate.time - currentSongTime) * pixelsPerSec);
 
   if (bestCandidate.duration === 0) {
@@ -699,16 +744,16 @@ function triggerLaneHit(laneIdx) {
     combo++;
     if (combo > maxCombo) maxCombo = combo;
 
-    if (bestAbsDiff <= PERFECT_WINDOW) {
+    if (absDiff <= PERFECT_WINDOW) {
       stats.perfect++;
       score += 1000 + combo * 10;
-      updateHUD('PERFECT', 'judge-perfect');
-      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
+      updateHUD('PERFECT', 'judge-perfect', timingStr);
+      spawnNoteBurst(matchedLane, hitY, false);
     } else {
       stats.good++;
       score += 500 + combo * 5;
-      updateHUD('GOOD', 'judge-good');
-      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
+      updateHUD('GOOD', 'judge-good', timingStr);
+      spawnNoteBurst(matchedLane, hitY, true);
     }
   } else {
     bestCandidate.hit = true;
@@ -720,26 +765,29 @@ function triggerLaneHit(laneIdx) {
     combo++;
     if (combo > maxCombo) maxCombo = combo;
 
-    if (bestAbsDiff <= PERFECT_WINDOW + 0.01) {
+    if (absDiff <= PERFECT_WINDOW + 0.01) {
       stats.perfect++;
       score += 800;
-      updateHUD('HOLD!', 'judge-perfect');
-      spawnNoteBurst(laneIdx, hitY, false); // 黃色光
+      updateHUD('HOLD!', 'judge-perfect', timingStr);
+      spawnNoteBurst(matchedLane, hitY, false);
     } else {
       stats.good++;
       score += 400;
-      updateHUD('HOLD!', 'judge-good');
-      spawnNoteBurst(laneIdx, hitY, true);  // 綠色光
+      updateHUD('HOLD!', 'judge-good', timingStr);
+      spawnNoteBurst(matchedLane, hitY, true);
     }
   }
 }
 
-function updateHUD(judgeStr, cssClass) {
+function updateHUD(judgeStr, cssClass, detailStr = '') {
   document.getElementById('score').innerText = String(score).padStart(6, '0');
   document.getElementById('combo-num').innerText = combo;
   const judgeEl = document.getElementById('judge-text');
   judgeEl.innerText = judgeStr;
   judgeEl.className = `judge-text ${cssClass}`;
+  if (detailStr !== undefined) {
+    document.getElementById('timing-detail').innerText = detailStr;
+  }
 }
 
 function endGame() {
@@ -769,7 +817,7 @@ function endGame() {
 }
 
 // ==========================================
-// 雙端輸入同步（手指按下即鎖定軌道並直接觸發判定，零狀態競態吃音）
+// 雙端輸入同步（全舞台觸控支援 + 防多指手勢攔截）
 // ==========================================
 function updateLaneVisuals() {
   const nextStates = new Array(laneCount).fill(false);
@@ -801,7 +849,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     keyboardStates[idx] = true;
     updateLaneVisuals();
-    triggerLaneHit(idx);
+    triggerLaneHit(idx, null);
   }
 });
 
@@ -817,56 +865,41 @@ window.addEventListener('keyup', (e) => {
 function getLaneFromClientX(clientX) {
   const stage = document.getElementById('stage-container');
   const rect = stage.getBoundingClientRect();
-  if (clientX < rect.left || clientX > rect.right) return -1;
+  // 放寬左右邊緣 16px 觸控容錯
+  if (clientX < rect.left - 16 || clientX > rect.right + 16) return -1;
+  const clampedX = Math.max(rect.left, Math.min(rect.right - 1, clientX));
   const laneWidth = rect.width / laneCount;
-  const laneIdx = Math.floor((clientX - rect.left) / laneWidth);
+  const laneIdx = Math.floor((clampedX - rect.left) / laneWidth);
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-// 1. 手指按下：鎖定落下的軌道，並直接觸發該軌道判定
-window.addEventListener('touchstart', (e) => {
+// 1. 手指按下：全舞台區域皆可觸控（僅避開頂部 48px 暫停列）
+document.addEventListener('touchstart', (e) => {
   if (!isPlaying || isPaused) return;
-  const touchZoneTop = window.innerHeight * 0.5;
-  let handled = false;
+  if (e.target && e.target.closest('.top-bar')) return;
+
+  e.preventDefault(); // 強制阻斷 Safari 雙指縮放與多指手勢
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
-    if (t.clientY >= touchZoneTop) {
+    if (t.clientY > 48) {
+      spawnTouchRipple(t.clientX, t.clientY);
       const laneIdx = getLaneFromClientX(t.clientX);
       if (laneIdx !== -1) {
         activeTouches.set(t.identifier, laneIdx);
-        handled = true;
-        triggerLaneHit(laneIdx); // 每根新手指落下直接觸發一次判定，絕不被布林值吞音
+        triggerLaneHit(laneIdx, t.identifier);
       }
     }
   }
 
-  if (handled) {
-    e.preventDefault();
-    updateLaneVisuals();
-  }
+  updateLaneVisuals();
 }, { passive: false });
 
-// 2. 手指移動：保持原本落下的軌道鎖定（不因手指高速連打微滑而飄到別軌）
-window.addEventListener('touchmove', (e) => {
+document.addEventListener('touchmove', (e) => {
   if (!isPlaying || isPaused) return;
-  let changed = false;
-
-  for (let i = 0; i < e.changedTouches.length; i++) {
-    const t = e.changedTouches[i];
-    if (activeTouches.has(t.identifier) && t.clientY < window.innerHeight * 0.35) {
-      activeTouches.delete(t.identifier);
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    e.preventDefault();
-    updateLaneVisuals();
-  }
+  e.preventDefault();
 }, { passive: false });
 
-// 3. 手指抬起：解除該手指鎖定
 function handleTouchRelease(e) {
   let changed = false;
   for (let i = 0; i < e.changedTouches.length; i++) {
@@ -882,5 +915,10 @@ function handleTouchRelease(e) {
   }
 }
 
-window.addEventListener('touchend', handleTouchRelease, { passive: false });
-window.addEventListener('touchcancel', handleTouchRelease, { passive: false });
+document.addEventListener('touchend', handleTouchRelease, { passive: false });
+document.addEventListener('touchcancel', handleTouchRelease, { passive: false });
+
+// 阻斷 iOS Safari 專屬的多指捏合手勢事件（極常吃掉雙押）
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
