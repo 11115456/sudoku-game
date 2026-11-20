@@ -8,12 +8,15 @@
   touch-action: none;
 }
 
-body {
+html, body {
   background: radial-gradient(circle at center, #0a192f 0%, #02060d 100%);
   color: #e0f7fa;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   height: 100dvh;
+  width: 100vw;
   overflow: hidden;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
 }
@@ -26,7 +29,7 @@ body {
   padding: 8px 16px;
   background: rgba(5, 12, 24, 0.95);
   border-bottom: 1px solid rgba(0, 240, 255, 0.3);
-  z-index: 20;
+  z-index: 30;
 }
 
 .user-badge {
@@ -259,7 +262,7 @@ input[type="range"] {
 }
 
 .combo-box {
-  margin-top: 26px;
+  margin-top: 22px;
 }
 
 .combo-num {
@@ -274,6 +277,14 @@ input[type="range"] {
   font-weight: bold;
   letter-spacing: 3px;
   margin-top: 2px;
+}
+
+.timing-detail {
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+  min-height: 1em;
 }
 
 .judge-perfect { color: #ffd700; text-shadow: 0 0 12px #ffd700; }
@@ -291,18 +302,6 @@ input[type="range"] {
   box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
   display: flex;
   flex-direction: column;
-}
-
-/* 螢幕下半部防誤觸感應區分界線 */
-.stage-container::after {
-  content: "";
-  position: fixed;
-  top: 50%;
-  left: 0;
-  width: 100%;
-  border-top: 1px dashed rgba(0, 240, 255, 0.18);
-  pointer-events: none;
-  z-index: 8;
 }
 
 .lanes-wrapper {
@@ -326,13 +325,13 @@ input[type="range"] {
 }
 
 .lane.active {
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 15%, rgba(0, 240, 255, 0.42) 100%);
-  box-shadow: inset 0 -12px 24px rgba(0, 240, 255, 0.45);
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 15%, rgba(0, 240, 255, 0.45) 100%);
+  box-shadow: inset 0 -12px 24px rgba(0, 240, 255, 0.5);
 }
 
 .lane.space-lane.active {
-  background: linear-gradient(180deg, rgba(255, 0, 128, 0) 15%, rgba(255, 0, 128, 0.42) 100%);
-  box-shadow: inset 0 -12px 24px rgba(255, 0, 128, 0.45);
+  background: linear-gradient(180deg, rgba(255, 0, 128, 0) 15%, rgba(255, 0, 128, 0.45) 100%);
+  box-shadow: inset 0 -12px 24px rgba(255, 0, 128, 0.5);
 }
 
 .lane-key-watermark {
@@ -355,6 +354,26 @@ input[type="range"] {
 .lane.active .lane-key-watermark {
   color: rgba(255, 255, 255, 0.95);
   transform: scale(1.15);
+}
+
+/* 手指觸控落點回饋光環（讓你親眼確認平板每次點擊都有收到） */
+.touch-ripple {
+  position: fixed;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 240, 255, 0.25);
+  pointer-events: none;
+  z-index: 40;
+  animation: rippleFade 0.22s ease-out forwards;
+}
+
+@keyframes rippleFade {
+  0%   { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
 /* 從按鍵位置炸開的判定特效（PERFECT 金黃光 / GOOD 翠綠光） */
@@ -382,14 +401,8 @@ input[type="range"] {
 }
 
 @keyframes noteBurstAnim {
-  0% {
-    transform: scaleX(0.8) scaleY(0.8);
-    opacity: 1;
-  }
-  100% {
-    transform: scaleX(1.45) scaleY(2.6);
-    opacity: 0;
-  }
+  0%   { transform: scaleX(0.8) scaleY(0.8); opacity: 1; }
+  100% { transform: scaleX(1.45) scaleY(2.6); opacity: 0; }
 }
 
 /* 單點音符 (Tap Note) */
