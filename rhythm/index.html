@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CYBER BEAT - 多軌科技音遊</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 頂部狀態列 -->
+  <header class="top-bar">
+    <button id="back-lobby-btn" class="cyber-btn small">⬅ 返回大廳</button>
+    <div id="user-badge" class="user-badge">訪客模式</div>
+    <button id="pause-btn" class="cyber-btn small" style="display:none;">⏸ 暫停</button>
+  </header>
+
+  <!-- 選單與設定畫面 -->
+  <main id="menu-screen" class="menu-screen">
+    <h1 class="game-title">CYBER BEAT</h1>
+    <p class="subtitle">支援 PC 鍵盤 (S D F Space J K L) 與手機多點觸控</p>
+
+    <div class="control-group">
+      <label>選擇軌道數 (Key Mode)：</label>
+      <div class="key-selector" id="key-selector">
+        <button class="mode-btn active" data-keys="4">4K</button>
+        <button class="mode-btn" data-keys="5">5K</button>
+        <button class="mode-btn" data-keys="6">6K</button>
+        <button class="mode-btn" data-keys="7">7K</button>
+      </div>
+      <div id="key-hint" class="key-hint">對應按鍵：D - F - J - K</div>
+    </div>
+
+    <div class="control-group">
+      <label>下落速度 (Speed)：<span id="speed-val">5</span></label>
+      <input type="range" id="speed-slider" min="2" max="10" value="5">
+    </div>
+
+    <div class="control-group">
+      <label>音訊延遲微調 (Offset)：<span id="offset-val">0</span> ms</label>
+      <input type="range" id="offset-slider" min="-150" max="150" step="5" value="0">
+    </div>
+
+    <button id="start-btn" class="cyber-btn primary">▶ 開始演奏</button>
+  </main>
+
+  <!-- 遊戲主舞台 -->
+  <section id="game-screen" class="game-screen" style="display:none;">
+    <!-- 分數與連擊 HUD -->
+    <div class="hud">
+      <div class="score-box">SCORE: <span id="score">000000</span></div>
+      <div class="combo-box">
+        <div id="combo-num" class="combo-num">0</div>
+        <div id="judge-text" class="judge-text">READY</div>
+      </div>
+    </div>
+
+    <!-- 軌道容器（JS 動態生成 4~7 軌與觸控感應區） -->
+    <div id="stage-container" class="stage-container">
+      <div id="lanes-wrapper" class="lanes-wrapper"></div>
+      <div class="hit-line"></div>
+      <div id="keys-wrapper" class="keys-wrapper"></div>
+    </div>
+  </section>
+
+  <!-- 結算視窗 -->
+  <div id="result-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h2>STAGE CLEAR</h2>
+      <p>模式：<span id="res-mode">4K</span></p>
+      <p>最終分數：<span id="res-score">0</span></p>
+      <p>最大連擊：<span id="res-max-combo">0</span></p>
+      <p>PERFECT: <span id="res-perfect">0</span> | GOOD: <span id="res-good">0</span> | MISS: <span id="res-miss">0</span></p>
+      <div class="modal-actions">
+        <button id="retry-btn" class="cyber-btn primary">↻ 再玩一次</button>
+        <button id="to-menu-btn" class="cyber-btn">回到選單</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
