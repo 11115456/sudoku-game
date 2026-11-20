@@ -1,4 +1,3 @@
-
 const RENDER_URL = "https://sudoku-game-zjff.onrender.com";
 
 // 鍵位配置表（支援 4, 5, 6, 7 軌）
@@ -75,11 +74,12 @@ const SONGS = [
 
 let selectedSongIndex = 1; // 預設選中 Lv.3
 let laneCount = 4;
-let noteSpeed = 5;
+let noteSpeed = 8;      // 範圍 1 ~ 15
+let stageWidthPct = 100; // 範圍 40% ~ 100%
 let audioOffset = 0;
 
 let currentUser = "";
-let rhythmScores = {}; // 格式: { "cyber_pulse_4K": 125000 }
+let rhythmScores = {};
 
 let isPlaying = false;
 let isPaused = false;
@@ -112,9 +112,25 @@ window.onload = function() {
     renderSongList();
   }
 
+  // 讀取玩家上次自訂的流速與軌道寬度偏好
+  const savedSpeed = localStorage.getItem('rhythm_pref_speed');
+  const savedWidth = localStorage.getItem('rhythm_pref_width');
+  if (savedSpeed) {
+    noteSpeed = parseFloat(savedSpeed);
+    document.getElementById('speed-slider').value = noteSpeed;
+    document.getElementById('speed-val').innerText = noteSpeed;
+  }
+  if (savedWidth) {
+    stageWidthPct = parseInt(savedWidth, 10);
+    document.getElementById('width-slider').value = stageWidthPct;
+    document.getElementById('width-val').innerText = stageWidthPct;
+  }
+
   document.getElementById('back-lobby-btn').onclick = () => {
     window.location.href = "../index.html";
   };
+
+  renderSongList();
 
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.onclick = () => {
@@ -126,12 +142,23 @@ window.onload = function() {
     };
   });
 
+  // 1. 流速滑桿 (1 ~ 15)
   const speedSlider = document.getElementById('speed-slider');
   speedSlider.oninput = () => {
-    noteSpeed = parseInt(speedSlider.value, 10);
+    noteSpeed = parseFloat(speedSlider.value);
     document.getElementById('speed-val').innerText = noteSpeed;
+    localStorage.setItem('rhythm_pref_speed', noteSpeed);
   };
 
+  // 2. 軌道寬度滑桿 (40% ~ 100%)
+  const widthSlider = document.getElementById('width-slider');
+  widthSlider.oninput = () => {
+    stageWidthPct = parseInt(widthSlider.value, 10);
+    document.getElementById('width-val').innerText = stageWidthPct;
+    localStorage.setItem('rhythm_pref_width', stageWidthPct);
+  };
+
+  // 3. 延遲滑桿
   const offsetSlider = document.getElementById('offset-slider');
   offsetSlider.oninput = () => {
     audioOffset = parseInt(offsetSlider.value, 10);
@@ -153,7 +180,6 @@ window.onload = function() {
   document.getElementById('pause-btn').onclick = togglePause;
 };
 
-// 從雲端與本地載入歷史最高分
 function loadRhythmScores() {
   const localCache = localStorage.getItem(`rhythmScores_${currentUser}`);
   if (localCache) rhythmScores = JSON.parse(localCache);
@@ -182,7 +208,6 @@ function saveRhythmScores() {
   }
   localStorage.setItem(`rhythmScores_${currentUser}`, JSON.stringify(rhythmScores));
 
-  // 先取得使用者現有數獨資料，避免覆蓋其他遊戲進度
   fetch(`${RENDER_URL}/api/user-data`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -204,7 +229,6 @@ function saveRhythmScores() {
   .catch(() => {});
 }
 
-// 渲染曲目選單（顯示該曲目在當前軌道模式下的最高分）
 function renderSongList() {
   const listEl = document.getElementById('song-list');
   listEl.innerHTML = '';
@@ -240,8 +264,13 @@ function renderSongList() {
 }
 
 function buildStage() {
+  const stageContainer = document.getElementById('stage-container');
   const lanesWrapper = document.getElementById('lanes-wrapper');
   const keysWrapper = document.getElementById('keys-wrapper');
+
+  // 套用玩家自訂的軌道寬度百分比 (40% ~ 100%)
+  stageContainer.style.width = `${stageWidthPct}%`;
+
   lanesWrapper.innerHTML = '';
   keysWrapper.innerHTML = '';
 
@@ -266,7 +295,6 @@ function buildStage() {
   }
 }
 
-// 智慧難度譜面生成器（支援長條、多押、樓梯、複合技巧）
 function generateChartForSong(song) {
   chartNotes = [];
   const beatSec = 60 / song.bpm;
@@ -331,7 +359,6 @@ function generateChartForSong(song) {
     laneBusyUntil[mainLane] = t + holdDuration;
     freeLanes = freeLanes.filter(l => l !== mainLane);
 
-    // 雙押判斷
     let chordChance = 0;
     if (lv >= 3 && lv <= 5 && isQuarter) chordChance = 0.3;
     else if (lv >= 6 && lv <= 8 && isEighth) chordChance = 0.45;
@@ -347,7 +374,6 @@ function generateChartForSong(song) {
       laneBusyUntil[secondLane] = t + secondHold;
       freeLanes = freeLanes.filter(l => l !== secondLane);
 
-      // 三押判斷（Lv.8 ~ Lv.10 且軌道數 >= 5）
       if (lv >= 8 && laneCount >= 5 && isQuarter && freeLanes.length > 0 && Math.random() < (lv === 10 ? 0.45 : 0.2)) {
         const thirdLane = freeLanes[Math.floor(Math.random() * freeLanes.length)];
         createNoteObject(t, 0, thirdLane);
@@ -398,7 +424,7 @@ function startGame() {
   document.getElementById('game-screen').style.display = 'flex';
   document.getElementById('pause-btn').style.display = 'inline-block';
   document.getElementById('pause-btn').innerText = '⏸ 暫停';
-  document.getElementById('hud-song-title').innerText = `${song.title} [${laneCount}K • Lv.${song.level}]`;
+  document.getElementById('hud-song-title').innerText = `${song.title} [${laneCount}K • Lv.${song.level} • 流速 ${noteSpeed}]`;
 
   score = 0;
   combo = 0;
@@ -500,7 +526,11 @@ function gameLoop() {
   const song = SONGS[selectedSongIndex];
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
   const stageHeight = document.getElementById('lanes-wrapper').clientHeight;
-  const pixelsPerSec = stageHeight / (2.2 - noteSpeed * 0.16);
+
+  // 新版極限流速公式（1 ~ 15 檔）：
+  // Speed 1 = 2.1s 落到底 | Speed 8 = 0.85s | Speed 15 = 0.28s (超高速魔王讀譜)
+  const fallDuration = Math.max(0.26, 2.2 - (noteSpeed - 1) * 0.137);
+  const pixelsPerSec = stageHeight / fallDuration;
   const eighthSec = (60 / song.bpm) / 2;
 
   while (nextSynthStep * eighthSec < currentSongTime + 0.2 && nextSynthStep * eighthSec < song.duration) {
@@ -723,6 +753,7 @@ function handleTouchUpdate(e) {
   if (!isPlaying || isPaused) return;
   e.preventDefault();
 
+  // 自動抓取縮放後的實際舞台邊界，確保不管寬度調成 40% 或 100% 觸控都 100% 精準對齊
   const stage = document.getElementById('stage-container');
   const rect = stage.getBoundingClientRect();
   const laneWidth = rect.width / laneCount;
@@ -749,3 +780,4 @@ stageContainer.addEventListener('touchstart', handleTouchUpdate, { passive: fals
 stageContainer.addEventListener('touchmove', handleTouchUpdate, { passive: false });
 stageContainer.addEventListener('touchend', handleTouchUpdate, { passive: false });
 stageContainer.addEventListener('touchcancel', handleTouchUpdate, { passive: false });
+
