@@ -7,18 +7,24 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- 頂部狀態列 -->
   <header class="top-bar">
     <button id="back-lobby-btn" class="cyber-btn small">⬅ 返回大廳</button>
     <div id="user-badge" class="user-badge">訪客模式</div>
     <button id="pause-btn" class="cyber-btn small" style="display:none;">⏸ 暫停</button>
   </header>
 
-  <!-- 選單與設定畫面 -->
+  <!-- 選單與曲目選擇畫面 -->
   <main id="menu-screen" class="menu-screen">
     <h1 class="game-title">CYBER BEAT</h1>
     <p class="subtitle">支援 PC 鍵盤 (S D F Space J K L) 與手機多點觸控</p>
 
+    <!-- 曲目選擇列表 -->
+    <div class="control-group song-group">
+      <label>選擇曲目與難度 (Track Select)：</label>
+      <div id="song-list" class="song-list"></div>
+    </div>
+
+    <!-- 軌道數選擇 -->
     <div class="control-group">
       <label>選擇軌道數 (Key Mode)：</label>
       <div class="key-selector" id="key-selector">
@@ -30,14 +36,16 @@
       <div id="key-hint" class="key-hint">對應按鍵：D - F - J - K</div>
     </div>
 
-    <div class="control-group">
-      <label>下落速度 (Speed)：<span id="speed-val">5</span></label>
-      <input type="range" id="speed-slider" min="2" max="10" value="5">
-    </div>
-
-    <div class="control-group">
-      <label>音訊延遲微調 (Offset)：<span id="offset-val">0</span> ms</label>
-      <input type="range" id="offset-slider" min="-150" max="150" step="5" value="0">
+    <!-- 速度與延遲設定 -->
+    <div class="sliders-row">
+      <div class="control-group half">
+        <label>下落速度：<span id="speed-val">5</span></label>
+        <input type="range" id="speed-slider" min="2" max="10" value="5">
+      </div>
+      <div class="control-group half">
+        <label>延遲微調：<span id="offset-val">0</span> ms</label>
+        <input type="range" id="offset-slider" min="-150" max="150" step="5" value="0">
+      </div>
     </div>
 
     <button id="start-btn" class="cyber-btn primary">▶ 開始演奏</button>
@@ -45,8 +53,8 @@
 
   <!-- 遊戲主舞台 -->
   <section id="game-screen" class="game-screen" style="display:none;">
-    <!-- 分數與連擊 HUD -->
     <div class="hud">
+      <div class="song-info-hud" id="hud-song-title">SONG TITLE [Lv.3]</div>
       <div class="score-box">SCORE: <span id="score">000000</span></div>
       <div class="combo-box">
         <div id="combo-num" class="combo-num">0</div>
@@ -54,7 +62,6 @@
       </div>
     </div>
 
-    <!-- 軌道容器（JS 動態生成 4~7 軌與觸控感應區） -->
     <div id="stage-container" class="stage-container">
       <div id="lanes-wrapper" class="lanes-wrapper"></div>
       <div class="hit-line"></div>
@@ -66,8 +73,9 @@
   <div id="result-modal" class="modal" style="display:none;">
     <div class="modal-content">
       <h2>STAGE CLEAR</h2>
-      <p>模式：<span id="res-mode">4K</span></p>
-      <p>最終分數：<span id="res-score">0</span></p>
+      <p id="res-song" class="res-song-title">Song Name</p>
+      <p>模式：<span id="res-mode">4K</span> | 難度：<span id="res-lv">Lv.3</span></p>
+      <p class="res-score-big">最終分數：<span id="res-score">0</span></p>
       <p>最大連擊：<span id="res-max-combo">0</span></p>
       <p>PERFECT: <span id="res-perfect">0</span> | GOOD: <span id="res-good">0</span> | MISS: <span id="res-miss">0</span></p>
       <div class="modal-actions">
