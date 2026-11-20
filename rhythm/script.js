@@ -89,7 +89,7 @@ let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-// 獨立多點觸控追蹤器：key = touch.identifier, value = 該手指鎖定的軌道編號
+// 獨立多點觸控追蹤器
 const activeTouches = new Map();
 let keyboardStates = [];
 let touchStates = [];
@@ -261,15 +261,13 @@ function renderSongList() {
   });
 }
 
+// 建立世界計畫風無基座軌道舞台
 function buildStage() {
   const stageContainer = document.getElementById('stage-container');
   const lanesWrapper = document.getElementById('lanes-wrapper');
-  const keysWrapper = document.getElementById('keys-wrapper');
 
   stageContainer.style.width = `${stageWidthPct}%`;
-
   lanesWrapper.innerHTML = '';
-  keysWrapper.innerHTML = '';
 
   activeTouches.clear();
   keyboardStates = new Array(laneCount).fill(false);
@@ -283,13 +281,14 @@ function buildStage() {
     const lane = document.createElement('div');
     lane.className = 'lane' + (i === spaceIdx ? ' space-lane' : '');
     lane.id = `lane-${i}`;
-    lanesWrapper.appendChild(lane);
 
-    const keyPad = document.createElement('div');
-    keyPad.className = 'key-pad' + (i === spaceIdx ? ' space-key' : '');
-    keyPad.id = `key-${i}`;
-    keyPad.innerText = labels[i];
-    keysWrapper.appendChild(keyPad);
+    // 在判定線正上方加入極淡的鍵位浮水印提示
+    const watermark = document.createElement('div');
+    watermark.className = 'lane-key-watermark';
+    watermark.innerText = labels[i];
+    lane.appendChild(watermark);
+
+    lanesWrapper.appendChild(lane);
   }
 }
 
@@ -401,7 +400,7 @@ function createNoteObject(time, duration, laneIdx) {
     lane: laneIdx,
     hit: false,
     holding: false,
-    releaseStartTime: 0, // 記錄長條途中鬆手的時間，給予 110ms 觸控防抖寬限
+    releaseStartTime: 0,
     completed: false,
     missed: false,
     lastTickTime: time,
@@ -520,6 +519,17 @@ function playHitSound(isHoldTick = false) {
   osc.stop(now + 0.045);
 }
 
+// 觸發單一判定線脈衝閃光
+function pulseHitLine() {
+  const hitLine = document.getElementById('hit-line');
+  if (!hitLine) return;
+  hitLine.classList.add('pulse');
+  clearTimeout(hitLine._pulseTimer);
+  hitLine._pulseTimer = setTimeout(() => {
+    hitLine.classList.remove('pulse');
+  }, 60);
+}
+
 function gameLoop() {
   if (!isPlaying || isPaused) return;
 
@@ -574,7 +584,6 @@ function gameLoop() {
       } else {
         const remainingTime = endTime - currentSongTime;
 
-        // 1. 尾部接近判定線（允許提前 100ms 放開）直接判定完成
         if (remainingTime <= 0.1) {
           n.completed = true;
           n.el.remove();
@@ -583,10 +592,10 @@ function gameLoop() {
           stats.perfect++;
           score += 1200 + combo * 10;
           updateHUD('PERFECT', 'judge-perfect');
+          pulseHitLine();
           continue;
         }
 
-        // 2. 檢查該軌道是否仍被按住（加入 110ms 觸控防抖寬限，防止多指連打時瞬斷誤判 Miss）
         if (!combinedStates[n.lane]) {
           if (n.releaseStartTime === 0) {
             n.releaseStartTime = currentSongTime;
@@ -599,11 +608,9 @@ function gameLoop() {
             continue;
           }
         } else {
-          // 只要在寬限期內重新壓住，重置計時器
           n.releaseStartTime = 0;
         }
 
-        // 3. 持續按住中：尾部縮短貼齊判定線
         const currentHeight = Math.max(0, remainingTime * pixelsPerSec);
         n.el.style.top = `${stageHeight - currentHeight}px`;
         n.el.style.height = `${currentHeight}px`;
@@ -625,10 +632,11 @@ function gameLoop() {
   animFrameId = requestAnimationFrame(gameLoop);
 }
 
-// 嚴格 FIFO 順序判定：只允許判定該軌道「最前面尚未處理的第一顆音符」
+// 嚴格 FIFO 順序判定
 function triggerLaneHit(laneIdx) {
   if (!isPlaying || isPaused) return;
   playHitSound(false);
+  pulseHitLine();
 
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
 
@@ -733,10 +741,8 @@ function syncAllInputs() {
     combinedStates[i] = isNowPressed;
 
     const laneEl = document.getElementById(`lane-${i}`);
-    const keyEl = document.getElementById(`key-${i}`);
-    if (laneEl && keyEl) {
+    if (laneEl) {
       laneEl.classList.toggle('active', isNowPressed);
-      keyEl.classList.toggle('active', isNowPressed);
     }
   }
 }
@@ -761,7 +767,6 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// 根據 X 座標計算對應軌道
 function getLaneFromClientX(clientX) {
   const stage = document.getElementById('stage-container');
   const rect = stage.getBoundingClientRect();
@@ -771,7 +776,6 @@ function getLaneFromClientX(clientX) {
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-// 由 activeTouches Map 重新彙整各軌道是否被觸控按住
 function rebuildTouchStatesFromMap() {
   const nextStates = new Array(laneCount).fill(false);
   for (const laneIdx of activeTouches.values()) {
@@ -783,7 +787,6 @@ function rebuildTouchStatesFromMap() {
   syncAllInputs();
 }
 
-// 1. 手指按下：為該 touch.identifier 註冊獨立軌道鎖定
 window.addEventListener('touchstart', (e) => {
   if (!isPlaying || isPaused) return;
   const touchZoneTop = window.innerHeight * 0.5;
@@ -806,16 +809,13 @@ window.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
-// 2. 手指移動：僅更新移動的那根手指（不影響其他按住長條的手指）
 window.addEventListener('touchmove', (e) => {
   if (!isPlaying || isPaused) return;
-  const touchZoneTop = window.innerHeight * 0.5;
   let changed = false;
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     if (activeTouches.has(t.identifier)) {
-      // 如果手指滑出下半部防誤觸區太遠（超過 40% 高度），才解除該手指
       if (t.clientY < window.innerHeight * 0.4) {
         activeTouches.delete(t.identifier);
         changed = true;
@@ -835,7 +835,6 @@ window.addEventListener('touchmove', (e) => {
   }
 }, { passive: false });
 
-// 3. 手指抬起或中斷：精準移除抬起的那一根 identifier，其餘按住長條的手指完全不受影響
 function handleTouchRelease(e) {
   let changed = false;
   for (let i = 0; i < e.changedTouches.length; i++) {
