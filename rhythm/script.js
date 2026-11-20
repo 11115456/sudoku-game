@@ -72,9 +72,10 @@ const SONGS = [
   }
 ];
 
-const HIT_EARLY_WINDOW = 0.23;  // 提前按下容錯放寬至 230ms，徹底杜絕高速搶拍放生
-const HIT_LATE_WINDOW  = 0.17;  // 過線延遲容錯 170ms
-const PERFECT_WINDOW   = 0.075; // ±75ms 為 PERFECT
+// 街機級寬鬆判定時間窗（徹底解決高流速下差幾毫秒被放生掉下去的問題）
+const HIT_EARLY_WINDOW = 0.26;  // 提前 260ms 內按下皆有效
+const HIT_LATE_WINDOW  = 0.24;  // 過線 240ms 內按下皆有效
+const PERFECT_WINDOW   = 0.085; // ±85ms 為 PERFECT
 
 let selectedSongIndex = 1;
 let laneCount = 4;
@@ -93,7 +94,8 @@ let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-const activeTouches = new Map();
+// Pointer Events 多指獨立追蹤器（支援點擊 + 平板橫向滑入接鍵）
+const activePointers = new Map();
 let keyboardStates = [];
 let lanePressedStates = [];
 
@@ -270,7 +272,7 @@ function buildStage() {
   stageContainer.style.width = `${stageWidthPct}%`;
   lanesWrapper.innerHTML = '';
 
-  activeTouches.clear();
+  activePointers.clear();
   keyboardStates = new Array(laneCount).fill(false);
   lanePressedStates = new Array(laneCount).fill(false);
 
@@ -325,8 +327,7 @@ function generateChartForSong(song) {
 
     let freeLanes = [];
     for (let l = 0; l < laneCount; l++) {
-      // 強制同軌音符至少保留 220ms 間隔，徹底杜絕同軌重疊卡鍵
-      if (t >= laneBusyUntil[l] + 0.22) freeLanes.push(l);
+      if (t >= laneBusyUntil[l] + 0.24) freeLanes.push(l);
     }
     if (freeLanes.length === 0) continue;
 
@@ -448,7 +449,7 @@ function togglePause() {
   if (!isPaused) {
     isPaused = true;
     pauseStartTime = audioCtx.currentTime;
-    activeTouches.clear();
+    activePointers.clear();
     updateLaneVisuals();
     document.getElementById('pause-btn').innerText = '▶ 繼續';
   } else {
@@ -620,7 +621,7 @@ function gameLoop() {
         if (!lanePressedStates[n.lane]) {
           if (n.releaseStartTime === 0) {
             n.releaseStartTime = currentSongTime;
-          } else if (currentSongTime - n.releaseStartTime > 0.14) {
+          } else if (currentSongTime - n.releaseStartTime > 0.15) {
             n.missed = true;
             n.el.remove();
             combo = 0;
@@ -654,12 +655,14 @@ function gameLoop() {
 }
 
 // ==========================================
-// 純粹單軌精準判定引擎（移除鄰近偷吃，放寬搶拍容錯至 230ms）
+// 判定觸發器（支援直接點擊 + 平板橫向滑入接鍵）
 // ==========================================
-function triggerLaneHit(laneIdx) {
+function triggerLaneHit(laneIdx, isSlideIn = false) {
   if (!isPlaying || isPaused) return;
-  playHitSound(false);
-  pulseHitLine();
+  if (!isSlideIn) {
+    playHitSound(false);
+    pulseHitLine();
+  }
 
   const currentSongTime = (audioCtx.currentTime - songStartTime - totalPausedTime) - (audioOffset / 1000);
   const stageHeight = document.getElementById('lanes-wrapper').clientHeight;
@@ -674,7 +677,11 @@ function triggerLaneHit(laneIdx) {
     if (n.lane !== laneIdx || n.hit || n.holding || n.completed || n.missed) continue;
 
     const diff = n.time - currentSongTime;
-    if (diff >= -HIT_LATE_WINDOW && diff <= HIT_EARLY_WINDOW) {
+    // 如果是手指滑入新軌道，只在音符非常接近判定線（±120ms）時才觸發接鍵，避免提前誤掃
+    const earlyLimit = isSlideIn ? 0.12 : HIT_EARLY_WINDOW;
+    const lateLimit  = isSlideIn ? 0.14 : HIT_LATE_WINDOW;
+
+    if (diff >= -lateLimit && diff <= earlyLimit) {
       const absDiff = Math.abs(diff);
       if (absDiff < bestAbsDiff) {
         bestAbsDiff = absDiff;
@@ -684,6 +691,11 @@ function triggerLaneHit(laneIdx) {
   }
 
   if (!bestCandidate) return;
+
+  if (isSlideIn) {
+    playHitSound(false);
+    pulseHitLine();
+  }
 
   const signedDiffMs = Math.round((bestCandidate.time - currentSongTime) * 1000);
   const absDiff = Math.abs(bestCandidate.time - currentSongTime);
@@ -745,7 +757,7 @@ function updateHUD(judgeStr, cssClass, detailStr = '') {
 
 function endGame() {
   isPlaying = false;
-  activeTouches.clear();
+  activePointers.clear();
   const song = SONGS[selectedSongIndex];
   const recordKey = `${song.id}_${laneCount}K`;
   const oldBest = rhythmScores[recordKey] || 0;
@@ -769,13 +781,16 @@ function endGame() {
   document.getElementById('result-modal').style.display = 'flex';
 }
 
+// ==========================================
+// 雙端輸入引擎：Pointer Events 獨立多指追蹤 + 滑入接鍵
+// ==========================================
 function updateLaneVisuals() {
   const nextStates = new Array(laneCount).fill(false);
 
   for (let i = 0; i < laneCount; i++) {
     if (keyboardStates[i]) nextStates[i] = true;
   }
-  for (const laneIdx of activeTouches.values()) {
+  for (const laneIdx of activePointers.values()) {
     if (laneIdx >= 0 && laneIdx < laneCount) {
       nextStates[laneIdx] = true;
     }
@@ -799,7 +814,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     keyboardStates[idx] = true;
     updateLaneVisuals();
-    triggerLaneHit(idx);
+    triggerLaneHit(idx, false);
   }
 });
 
@@ -822,48 +837,47 @@ function getLaneFromClientX(clientX) {
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-document.addEventListener('touchstart', (e) => {
+// 1. Pointer Down：每根手指擁有獨立硬體 pointerId，無多指合併延遲
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return;
   if (!isPlaying || isPaused) return;
   if (e.target && e.target.closest('.top-bar')) return;
 
-  e.preventDefault();
-
-  for (let i = 0; i < e.changedTouches.length; i++) {
-    const t = e.changedTouches[i];
-    if (t.clientY > 48) {
-      const laneIdx = getLaneFromClientX(t.clientX);
-      if (laneIdx !== -1) {
-        activeTouches.set(t.identifier, laneIdx);
-        triggerLaneHit(laneIdx);
-      }
+  if (e.clientY > 48) {
+    const laneIdx = getLaneFromClientX(e.clientX);
+    if (laneIdx !== -1) {
+      activePointers.set(e.pointerId, laneIdx);
+      updateLaneVisuals();
+      triggerLaneHit(laneIdx, false);
     }
   }
+});
 
-  updateLaneVisuals();
-}, { passive: false });
-
-document.addEventListener('touchmove', (e) => {
+// 2. Pointer Move：平板滑入接鍵（手指快速連打時若微幅掃過相鄰軌道，自動幫你接住該軌音符！）
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'touch') return;
   if (!isPlaying || isPaused) return;
-  e.preventDefault();
-}, { passive: false });
+  if (!activePointers.has(e.pointerId)) return;
 
-function handleTouchRelease(e) {
-  let changed = false;
-  for (let i = 0; i < e.changedTouches.length; i++) {
-    const t = e.changedTouches[i];
-    if (activeTouches.has(t.identifier)) {
-      activeTouches.delete(t.identifier);
-      changed = true;
-    }
-  }
-  if (changed && isPlaying && !isPaused) {
-    e.preventDefault();
+  const newLane = getLaneFromClientX(e.clientX);
+  const oldLane = activePointers.get(e.pointerId);
+
+  if (newLane !== -1 && newLane !== oldLane) {
+    activePointers.set(e.pointerId, newLane);
     updateLaneVisuals();
+    triggerLaneHit(newLane, true);
+  }
+});
+
+function handlePointerEnd(e) {
+  if (e.pointerType !== 'touch') return;
+  if (activePointers.has(e.pointerId)) {
+    activePointers.delete(e.pointerId);
+    if (isPlaying && !isPaused) {
+      updateLaneVisuals();
+    }
   }
 }
 
-document.addEventListener('touchend', handleTouchRelease, { passive: false });
-document.addEventListener('touchcancel', handleTouchRelease, { passive: false });
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('pointerup', handlePointerEnd);
+document.addEventListener('pointercancel', handlePointerEnd);
