@@ -1,0 +1,13 @@
+{
+  "appId": "com.cyberbeat.arcade",
+  "appName": "CYBER BEAT",
+  "webDir": "www",
+  "server": {
+    "url": "https://11115456.github.io/sudoku-game/",
+    "cleartext": true
+  },
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false
+  }
+}
