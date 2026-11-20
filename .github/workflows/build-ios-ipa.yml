@@ -51,15 +51,23 @@ jobs:
       - name: Build Unsigned .xcarchive
         working-directory: mobile-app
         run: |
-          xcodebuild -project ios/App/App.xcodeproj \
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            TARGET_FLAG="-workspace ios/App/App.xcworkspace"
+          else
+            TARGET_FLAG="-project ios/App/App.xcodeproj"
+          fi
+
+          xcodebuild $TARGET_FLAG \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -archivePath build/App.xcarchive \
             archive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
 
       - name: Package into Unsigned IPA
         working-directory: mobile-app
