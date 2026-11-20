@@ -86,16 +86,18 @@ let rhythmScores = {};
 let isPlaying = false;
 let isPaused = false;
 let audioCtx = null;
+let hitSoundBuffer = null; // 預先渲染的打擊音效 Buffer，零延遲播放
 let songStartTime = 0;
 let pauseStartTime = 0;
 let totalPausedTime = 0;
 let animFrameId = null;
 
-// 雙引擎去重追蹤器（徹底消除跨設備高速連打複用 ID 導致的同軌吃音）
+// 追蹤每根手指目前所在的軌道 (touchKey -> laneIdx)
 const activeTouches = new Map();
 let keyboardStates = [];
 let lanePressedStates = [];
-let lastLaneHitTimestamp = []; // 記錄每軌最近一次觸發時間，防止 touchstart 與 pointerdown 重複觸發
+let lastLaneHitTimestamp = [];
+let stageRectCache = null;
 
 let chartNotes = [];
 let nextSynthStep = 0;
@@ -178,7 +180,38 @@ window.onload = function() {
     renderSongList();
   };
   document.getElementById('pause-btn').onclick = togglePause;
+
+  window.addEventListener('resize', updateStageRectCache);
+
+  // 直接將觸控監聽器綁定在舞台容器本身，避開 document 全局冒泡喚醒延遲
+  const stageEl = document.getElementById('stage-container');
+  stageEl.addEventListener('touchstart', onStageTouchStart, { passive: false });
+  stageEl.addEventListener('touchmove', onStageTouchMove, { passive: false });
+  stageEl.addEventListener('touchend', onStageTouchEnd, { passive: false });
+  stageEl.addEventListener('touchcancel', onStageTouchEnd, { passive: false });
 };
+
+function updateStageRectCache() {
+  const stage = document.getElementById('stage-container');
+  if (stage) {
+    stageRectCache = stage.getBoundingClientRect();
+  }
+}
+
+function initAudioBuffers() {
+  if (!audioCtx) return;
+  const sampleRate = audioCtx.sampleRate;
+  const length = Math.floor(sampleRate * 0.045);
+  const buffer = audioCtx.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) {
+    const t = i / sampleRate;
+    const freq = 880 + (320 * (t / 0.045));
+    const env = Math.exp(-t * 85);
+    data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.22;
+  }
+  hitSoundBuffer = buffer;
+}
 
 function loadRhythmScores() {
   const localCache = localStorage.getItem(`rhythmScores_${currentUser}`);
@@ -290,6 +323,8 @@ function buildStage() {
 
     lanesWrapper.appendChild(lane);
   }
+
+  updateStageRectCache();
 }
 
 function generateChartForSong(song) {
@@ -357,7 +392,6 @@ function generateChartForSong(song) {
     laneBusyUntil[mainLane] = t + holdDuration;
     freeLanes = freeLanes.filter(l => l !== mainLane);
 
-    // 確保雙押之間至少間隔一拍，避免物理上無法連續雙押跳躍
     let chordChance = 0;
     if (t - lastChordTime >= beatSec * 0.9) {
       if (lv >= 3 && lv <= 5 && isQuarter) chordChance = 0.3;
@@ -405,6 +439,7 @@ function createNoteObject(time, duration, laneIdx) {
     lane: laneIdx,
     hit: false,
     holding: false,
+    holdTouchId: null, // 獨立綁定按住此長條的手指 ID，避免被同軌其他手指誤撐
     releaseStartTime: 0,
     completed: false,
     missed: false,
@@ -419,6 +454,9 @@ function startGame() {
   }
   if (audioCtx.state === 'suspended') {
     audioCtx.resume();
+  }
+  if (!hitSoundBuffer) {
+    initAudioBuffers();
   }
 
   const song = SONGS[selectedSongIndex];
@@ -459,6 +497,7 @@ function togglePause() {
   } else {
     isPaused = false;
     totalPausedTime += (audioCtx.currentTime - pauseStartTime);
+    updateStageRectCache();
     document.getElementById('pause-btn').innerText = '⏸ 暫停';
     gameLoop();
   }
@@ -509,20 +548,13 @@ function playSongSynth(song, stepIndex, time) {
   synth.stop(time + stepSec * 0.95);
 }
 
-function playHitSound(isHoldTick = false) {
-  if (!audioCtx) return;
-  const now = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(isHoldTick ? 1100 : 880, now);
-  osc.frequency.exponentialRampToValueAtTime(isHoldTick ? 1400 : 1200, now + 0.035);
-  gain.gain.setValueAtTime(isHoldTick ? 0.07 : 0.14, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(now);
-  osc.stop(now + 0.045);
+// 零延遲 AudioBuffer 播放（取代每次建立 Oscillator 的主執行緒阻塞）
+function playHitSound() {
+  if (!audioCtx || !hitSoundBuffer) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = hitSoundBuffer;
+  src.connect(audioCtx.destination);
+  src.start(0);
 }
 
 function pulseHitLine() {
@@ -532,7 +564,7 @@ function pulseHitLine() {
   clearTimeout(hitLine._pulseTimer);
   hitLine._pulseTimer = setTimeout(() => {
     hitLine.classList.remove('pulse');
-  }, 60);
+  }, 55);
 }
 
 function spawnNoteBurst(laneIdx, yPos, isGood = false) {
@@ -542,7 +574,7 @@ function spawnNoteBurst(laneIdx, yPos, isGood = false) {
   burst.className = 'note-burst ' + (isGood ? 'good' : 'perfect');
   burst.style.top = `${yPos}px`;
   laneEl.appendChild(burst);
-  setTimeout(() => burst.remove(), 250);
+  setTimeout(() => burst.remove(), 230);
 }
 
 function gameLoop() {
@@ -609,7 +641,7 @@ function gameLoop() {
       } else {
         const remainingTime = endTime - currentSongTime;
 
-        if (remainingTime <= 0.1) {
+        if (remainingTime <= 0.08) {
           n.completed = true;
           n.el.remove();
           combo++;
@@ -622,10 +654,19 @@ function gameLoop() {
           continue;
         }
 
-        if (!lanePressedStates[n.lane]) {
+        // 精準檢查綁定這根長條的特定手指（或鍵盤按鍵）是否仍在該軌道上
+        let isStillHolding = keyboardStates[n.lane];
+        if (!isStillHolding && n.holdTouchId !== null) {
+          const fingerLane = activeTouches.get(n.holdTouchId);
+          if (fingerLane === n.lane) {
+            isStillHolding = true;
+          }
+        }
+
+        if (!isStillHolding) {
           if (n.releaseStartTime === 0) {
             n.releaseStartTime = currentSongTime;
-          } else if (currentSongTime - n.releaseStartTime > 0.15) {
+          } else if (currentSongTime - n.releaseStartTime > 0.14) {
             n.missed = true;
             n.el.remove();
             combo = 0;
@@ -658,20 +699,11 @@ function gameLoop() {
   animFrameId = requestAnimationFrame(gameLoop);
 }
 
-// ==========================================
-// 判定觸發器（含 15ms 雙引擎去重保護，杜絕同軌高速連打漏接）
-// ==========================================
-function triggerLaneHit(laneIdx, isSlideIn = false) {
+function triggerLaneHit(laneIdx, isSlideIn = false, touchId = null) {
   if (!isPlaying || isPaused) return;
 
-  // 防重複觸發保護：若同一軌在 18ms 內剛由另一個事件通道（touchstart / pointerdown）觸發過，則略過
-  const nowMs = performance.now();
-  if (!isSlideIn && (nowMs - lastLaneHitTimestamp[laneIdx] < 18)) {
-    return;
-  }
   if (!isSlideIn) {
-    lastLaneHitTimestamp[laneIdx] = nowMs;
-    playHitSound(false);
+    playHitSound();
     pulseHitLine();
   }
 
@@ -703,7 +735,7 @@ function triggerLaneHit(laneIdx, isSlideIn = false) {
   if (!bestCandidate) return;
 
   if (isSlideIn) {
-    playHitSound(false);
+    playHitSound();
     pulseHitLine();
   }
 
@@ -733,6 +765,7 @@ function triggerLaneHit(laneIdx, isSlideIn = false) {
   } else {
     bestCandidate.hit = true;
     bestCandidate.holding = true;
+    bestCandidate.holdTouchId = touchId; // 鎖定是哪一根手指按中這根長條
     bestCandidate.releaseStartTime = 0;
     bestCandidate.lastTickTime = currentSongTime;
     bestCandidate.el.style.opacity = '1';
@@ -791,9 +824,6 @@ function endGame() {
   document.getElementById('result-modal').style.display = 'flex';
 }
 
-// ==========================================
-// 跨平台無損輸入引擎（Touch Events + Pointer Events 雙重保險 + 封殺長按凍結）
-// ==========================================
 function updateLaneVisuals() {
   const nextStates = new Array(laneCount).fill(false);
 
@@ -806,12 +836,13 @@ function updateLaneVisuals() {
     }
   }
 
-  lanePressedStates = nextStates;
-
   for (let i = 0; i < laneCount; i++) {
-    const laneEl = document.getElementById(`lane-${i}`);
-    if (laneEl) {
-      laneEl.classList.toggle('active', lanePressedStates[i]);
+    if (lanePressedStates[i] !== nextStates[i]) {
+      lanePressedStates[i] = nextStates[i];
+      const laneEl = document.getElementById(`lane-${i}`);
+      if (laneEl) {
+        laneEl.classList.toggle('active', nextStates[i]);
+      }
     }
   }
 }
@@ -824,7 +855,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     keyboardStates[idx] = true;
     updateLaneVisuals();
-    triggerLaneHit(idx, false);
+    triggerLaneHit(idx, false, null);
   }
 });
 
@@ -838,8 +869,8 @@ window.addEventListener('keyup', (e) => {
 });
 
 function getLaneFromClientX(clientX) {
-  const stage = document.getElementById('stage-container');
-  const rect = stage.getBoundingClientRect();
+  if (!stageRectCache) updateStageRectCache();
+  const rect = stageRectCache;
   if (clientX < rect.left - 16 || clientX > rect.right + 16) return -1;
   const clampedX = Math.max(rect.left, Math.min(rect.right - 1, clientX));
   const laneWidth = rect.width / laneCount;
@@ -847,51 +878,46 @@ function getLaneFromClientX(clientX) {
   return (laneIdx >= 0 && laneIdx < laneCount) ? laneIdx : -1;
 }
 
-// 1. Touch Events（最底層觸控晶片事件：保證高速同軌連打 100% 觸發，不被複用 ID 吞掉）
-document.addEventListener('touchstart', (e) => {
-  if (!isPlaying || isPaused) return;
-  if (e.target && e.target.closest('.top-bar')) return;
-
-  e.preventDefault(); // 阻斷系統長按手勢凍結
-
-  for (let i = 0; i < e.changedTouches.length; i++) {
-    const t = e.changedTouches[i];
-    if (t.clientY > 48) {
-      const laneIdx = getLaneFromClientX(t.clientX);
-      if (laneIdx !== -1) {
-        activeTouches.set(`t_${t.identifier}`, laneIdx);
-        triggerLaneHit(laneIdx, false);
-      }
-    }
-  }
-  updateLaneVisuals();
-}, { passive: false });
-
-document.addEventListener('touchmove', (e) => {
+// 直接綁定在 #stage-container 上的零延遲多點觸控處理器
+function onStageTouchStart(e) {
   if (!isPlaying || isPaused) return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
-    const key = `t_${t.identifier}`;
-    if (activeTouches.has(key)) {
+    const laneIdx = getLaneFromClientX(t.clientX);
+    if (laneIdx !== -1) {
+      activeTouches.set(t.identifier, laneIdx);
+      triggerLaneHit(laneIdx, false, t.identifier);
+    }
+  }
+  updateLaneVisuals();
+}
+
+function onStageTouchMove(e) {
+  if (!isPlaying || isPaused) return;
+  e.preventDefault();
+
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (activeTouches.has(t.identifier)) {
       const newLane = getLaneFromClientX(t.clientX);
-      const oldLane = activeTouches.get(key);
+      const oldLane = activeTouches.get(t.identifier);
       if (newLane !== -1 && newLane !== oldLane) {
-        activeTouches.set(key, newLane);
-        triggerLaneHit(newLane, true);
+        activeTouches.set(t.identifier, newLane);
+        triggerLaneHit(newLane, true, t.identifier);
       }
     }
   }
   updateLaneVisuals();
-}, { passive: false });
+}
 
-function handleTouchEnd(e) {
+function onStageTouchEnd(e) {
   let changed = false;
   for (let i = 0; i < e.changedTouches.length; i++) {
-    const key = `t_${e.changedTouches[i].identifier}`;
-    if (activeTouches.has(key)) {
-      activeTouches.delete(key);
+    const id = e.changedTouches[i].identifier;
+    if (activeTouches.has(id)) {
+      activeTouches.delete(id);
       changed = true;
     }
   }
@@ -901,24 +927,6 @@ function handleTouchEnd(e) {
   }
 }
 
-document.addEventListener('touchend', handleTouchEnd, { passive: false });
-document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-
-// 2. Pointer Events 備援通道（若特定環境只派發 pointerdown 也能無縫接管）
-document.addEventListener('pointerdown', (e) => {
-  if (e.pointerType !== 'touch') return;
-  if (!isPlaying || isPaused) return;
-  if (e.target && e.target.closest('.top-bar')) return;
-
-  if (e.clientY > 48) {
-    const laneIdx = getLaneFromClientX(e.clientX);
-    if (laneIdx !== -1) {
-      triggerLaneHit(laneIdx, false);
-    }
-  }
-});
-
-// 3. 全面封殺長按右鍵選單與選取手勢（徹底防止按住長條超過 300ms 時瀏覽器吞掉另一隻手的點擊）
 document.addEventListener('contextmenu', (e) => {
   if (isPlaying) e.preventDefault();
 }, { passive: false });
