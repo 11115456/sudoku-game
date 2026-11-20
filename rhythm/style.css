@@ -317,14 +317,14 @@ input[type="range"] {
   position: relative;
   border-right: 1px solid rgba(0, 240, 255, 0.14);
   background: linear-gradient(180deg, rgba(5,10,20,0.4) 0%, rgba(10,25,47,0.75) 100%);
-  transition: background 0.05s;
+  transition: background 0.04s;
 }
 
 .lane:last-child {
   border-right: none;
 }
 
-/* 世界計畫風：按下時整條軌道向上的霓虹光束 (Key Beam) */
+/* 按下時整條軌道向上的霓虹光束 (Key Beam) */
 .lane.active {
   background: linear-gradient(180deg, rgba(0, 240, 255, 0) 15%, rgba(0, 240, 255, 0.42) 100%);
   box-shadow: inset 0 -12px 24px rgba(0, 240, 255, 0.45);
@@ -335,7 +335,7 @@ input[type="range"] {
   box-shadow: inset 0 -12px 24px rgba(255, 0, 128, 0.45);
 }
 
-/* 軌道底部極淡的鍵位提示字樣（取代實體方塊按鍵） */
+/* 軌道底部極淡的鍵位提示字樣 */
 .lane-key-watermark {
   position: absolute;
   bottom: 12px;
@@ -346,7 +346,7 @@ input[type="range"] {
   font-weight: 800;
   color: rgba(0, 240, 255, 0.25);
   pointer-events: none;
-  transition: color 0.06s, transform 0.06s;
+  transition: color 0.05s, transform 0.05s;
 }
 
 .lane.space-lane .lane-key-watermark {
@@ -354,21 +354,46 @@ input[type="range"] {
 }
 
 .lane.active .lane-key-watermark {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.95);
   transform: scale(1.15);
 }
 
-/* 單點音符 (Tap Note) */
+/* 打擊瞬間的判定線閃光特效 */
+.hit-spark {
+  position: absolute;
+  bottom: 0;
+  left: 5%;
+  width: 90%;
+  height: 18px;
+  background: radial-gradient(ellipse at center, #ffffff 0%, #00f0ff 50%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 14;
+  animation: sparkFade 0.18s ease-out forwards;
+}
+
+.hit-spark.good {
+  background: radial-gradient(ellipse at center, #ffffff 0%, #69f0ae 50%, transparent 100%);
+}
+
+@keyframes sparkFade {
+  0%   { transform: scaleX(0.7) scaleY(1); opacity: 1; }
+  100% { transform: scaleX(1.35) scaleY(2.2); opacity: 0; }
+}
+
+/* 單點音符 (Tap Note) - GPU 加速定位 */
 .note {
   position: absolute;
+  top: 0;
   left: 4%;
   width: 92%;
   height: 18px;
+  margin-top: -9px; /* 讓中心點精準對齊 Y 座標 */
   background: linear-gradient(90deg, #00b8d4, #84ffff, #00b8d4);
   border: 1.5px solid #ffffff;
   border-radius: 3px;
   box-shadow: 0 0 12px #00f0ff;
-  transform: translateY(-50%);
+  will-change: transform;
   pointer-events: none;
   z-index: 5;
 }
@@ -378,18 +403,20 @@ input[type="range"] {
   box-shadow: 0 0 12px #ff4081;
 }
 
-/* 長條音符 (Hold Note) */
+/* 長條音符 (Hold Note) - GPU 加速定位 */
 .hold-note {
   position: absolute;
+  top: 0;
   left: 8%;
   width: 84%;
   background: linear-gradient(180deg, rgba(0, 240, 255, 0.25) 0%, rgba(0, 240, 255, 0.78) 100%);
   border-left: 2px solid #00f0ff;
   border-right: 2px solid #00f0ff;
   border-top: 3px solid #84ffff;
-  border-bottom: 5px solid #ffffff;
+  border-bottom: 6px solid #ffffff;
   border-radius: 3px;
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+  will-change: transform, height;
   pointer-events: none;
   z-index: 4;
 }
@@ -428,7 +455,7 @@ input[type="range"] {
   transform: scaleY(1.4);
 }
 
-/* 判定線下方無基座緩衝區（給手指自然的觸控餘裕，且能看清剛過線的音符） */
+/* 判定線下方無基座緩衝區 */
 .bottom-buffer {
   height: 75px;
   width: 100%;
