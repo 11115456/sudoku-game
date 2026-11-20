@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>CYBER BEAT - 多軌科技音遊</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <!-- 頂部狀態列 -->
@@ -37,14 +37,18 @@
       <div id="key-hint" class="key-hint">對應按鍵：D - F - J - K</div>
     </div>
 
-    <!-- 速度與延遲設定 -->
-    <div class="sliders-row">
-      <div class="control-group half">
-        <label>下落速度：<span id="speed-val">5</span></label>
-        <input type="range" id="speed-slider" min="2" max="10" value="5">
+    <!-- 三項玩家自訂微調滑桿：流速(1~15)、軌道寬度(40%~100%)、延遲 -->
+    <div class="sliders-grid">
+      <div class="control-group slider-box">
+        <label>下落流速：<span id="speed-val" class="highlight-val">8</span> <small>(1~15)</small></label>
+        <input type="range" id="speed-slider" min="1" max="15" step="0.5" value="8">
       </div>
-      <div class="control-group half">
-        <label>延遲微調：<span id="offset-val">0</span> ms</label>
+      <div class="control-group slider-box">
+        <label>軌道寬度：<span id="width-val" class="highlight-val">100</span>%</label>
+        <input type="range" id="width-slider" min="40" max="100" step="5" value="100">
+      </div>
+      <div class="control-group slider-box">
+        <label>延遲微調：<span id="offset-val" class="highlight-val">0</span> ms</label>
         <input type="range" id="offset-slider" min="-150" max="150" step="5" value="0">
       </div>
     </div>
@@ -52,7 +56,7 @@
     <button id="start-btn" class="cyber-btn primary">▶ 開始演奏</button>
   </main>
 
-  <!-- 遊戲主舞台（橫向全螢幕寬軌道） -->
+  <!-- 遊戲主舞台 -->
   <section id="game-screen" class="game-screen" style="display:none;">
     <div class="hud">
       <div class="song-info-hud" id="hud-song-title">SONG TITLE [Lv.3]</div>
@@ -63,6 +67,7 @@
       </div>
     </div>
 
+    <!-- 寬度會根據 width-slider 動態設定 -->
     <div id="stage-container" class="stage-container">
       <div id="lanes-wrapper" class="lanes-wrapper"></div>
       <div class="hit-line"></div>
@@ -87,6 +92,6 @@
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=4"></script>
 </body>
 </html>
