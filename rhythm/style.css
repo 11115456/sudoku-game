@@ -305,7 +305,6 @@ input[type="range"] {
   z-index: 8;
 }
 
-/* 允許音符通過判定線後繼續向下延伸顯示，不被裁切 */
 .lanes-wrapper {
   position: relative;
   flex: 1;
@@ -326,7 +325,6 @@ input[type="range"] {
   border-right: none;
 }
 
-/* 按下時整條軌道向上的霓虹光束 */
 .lane.active {
   background: linear-gradient(180deg, rgba(0, 240, 255, 0) 15%, rgba(0, 240, 255, 0.42) 100%);
   box-shadow: inset 0 -12px 24px rgba(0, 240, 255, 0.45);
@@ -337,7 +335,6 @@ input[type="range"] {
   box-shadow: inset 0 -12px 24px rgba(255, 0, 128, 0.45);
 }
 
-/* 軌道底部極淡的鍵位提示字樣 */
 .lane-key-watermark {
   position: absolute;
   bottom: 12px;
@@ -469,7 +466,7 @@ input[type="range"] {
   transform: scaleY(1.4);
 }
 
-/* 判定線下方無基座緩衝區（加高至 105px，讓過線漸隱下墜的音符有足夠空間淡出） */
+/* 判定線下方無基座緩衝區 */
 .bottom-buffer {
   height: 105px;
   width: 100%;
