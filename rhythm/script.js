@@ -261,7 +261,6 @@ function renderSongList() {
   });
 }
 
-// 建立世界計畫風無基座軌道舞台
 function buildStage() {
   const stageContainer = document.getElementById('stage-container');
   const lanesWrapper = document.getElementById('lanes-wrapper');
@@ -282,7 +281,6 @@ function buildStage() {
     lane.className = 'lane' + (i === spaceIdx ? ' space-lane' : '');
     lane.id = `lane-${i}`;
 
-    // 在判定線正上方加入極淡的鍵位浮水印提示
     const watermark = document.createElement('div');
     watermark.className = 'lane-key-watermark';
     watermark.innerText = labels[i];
@@ -391,7 +389,7 @@ function createNoteObject(time, duration, laneIdx) {
     noteEl.className = 'note' + (laneIdx === spaceIdx ? ' space-note' : '');
   }
 
-  noteEl.style.top = '-200px';
+  noteEl.style.transform = 'translate3d(0, -300px, 0)';
   laneEl.appendChild(noteEl);
 
   chartNotes.push({
@@ -519,7 +517,6 @@ function playHitSound(isHoldTick = false) {
   osc.stop(now + 0.045);
 }
 
-// 觸發單一判定線脈衝閃光
 function pulseHitLine() {
   const hitLine = document.getElementById('hit-line');
   if (!hitLine) return;
@@ -528,6 +525,16 @@ function pulseHitLine() {
   hitLine._pulseTimer = setTimeout(() => {
     hitLine.classList.remove('pulse');
   }, 60);
+}
+
+// 在該軌道判定線處產生打擊閃光特效
+function spawnHitSpark(laneIdx, isGood = false) {
+  const laneEl = document.getElementById(`lane-${laneIdx}`);
+  if (!laneEl) return;
+  const spark = document.createElement('div');
+  spark.className = 'hit-spark' + (isGood ? ' good' : '');
+  laneEl.appendChild(spark);
+  setTimeout(() => spark.remove(), 190);
 }
 
 function gameLoop() {
@@ -554,7 +561,7 @@ function gameLoop() {
       if (n.hit) continue;
       const timeDiff = n.time - currentSongTime;
       const yPos = stageHeight - (timeDiff * pixelsPerSec);
-      n.el.style.top = `${yPos}px`;
+      n.el.style.transform = `translate3d(0, ${yPos}px, 0)`;
 
       if (timeDiff < -0.145) {
         n.missed = true;
@@ -571,7 +578,7 @@ function gameLoop() {
         const headY = stageHeight - (headDiff * pixelsPerSec);
         const holdHeight = n.duration * pixelsPerSec;
 
-        n.el.style.top = `${headY - holdHeight}px`;
+        n.el.style.transform = `translate3d(0, ${headY - holdHeight}px, 0)`;
         n.el.style.height = `${holdHeight}px`;
 
         if (headDiff < -0.145) {
@@ -593,6 +600,7 @@ function gameLoop() {
           score += 1200 + combo * 10;
           updateHUD('PERFECT', 'judge-perfect');
           pulseHitLine();
+          spawnHitSpark(n.lane, false);
           continue;
         }
 
@@ -612,7 +620,7 @@ function gameLoop() {
         }
 
         const currentHeight = Math.max(0, remainingTime * pixelsPerSec);
-        n.el.style.top = `${stageHeight - currentHeight}px`;
+        n.el.style.transform = `translate3d(0, ${stageHeight - currentHeight}px, 0)`;
         n.el.style.height = `${currentHeight}px`;
 
         if (currentSongTime - n.lastTickTime >= eighthSec) {
@@ -666,10 +674,12 @@ function triggerLaneHit(laneIdx) {
       stats.perfect++;
       score += 1000 + combo * 10;
       updateHUD('PERFECT', 'judge-perfect');
+      spawnHitSpark(laneIdx, false);
     } else {
       stats.good++;
       score += 500 + combo * 5;
       updateHUD('GOOD', 'judge-good');
+      spawnHitSpark(laneIdx, true);
     }
   } else {
     firstPendingNote.hit = true;
@@ -684,10 +694,12 @@ function triggerLaneHit(laneIdx) {
       stats.perfect++;
       score += 800;
       updateHUD('HOLD!', 'judge-perfect');
+      spawnHitSpark(laneIdx, false);
     } else {
       stats.good++;
       score += 400;
       updateHUD('HOLD!', 'judge-good');
+      spawnHitSpark(laneIdx, true);
     }
   }
 }
@@ -727,7 +739,7 @@ function endGame() {
 }
 
 // ==========================================
-// 雙端輸入同步引擎（獨立 Touch ID 追蹤 + 鍵盤同步）
+// 雙端輸入同步引擎（支援同軌雙指輪指連打 + 獨立 Touch ID）
 // ==========================================
 function syncAllInputs() {
   for (let i = 0; i < laneCount; i++) {
@@ -797,8 +809,14 @@ window.addEventListener('touchstart', (e) => {
     if (t.clientY >= touchZoneTop) {
       const laneIdx = getLaneFromClientX(t.clientX);
       if (laneIdx !== -1) {
+        // 關鍵修正：如果該軌道目前已經有一根手指按著，此時第二根新手指落下（雙指同軌輪指），
+        // 依然強制觸發一次 triggerLaneHit，徹底解決高速連打吞音問題！
+        const laneAlreadyHeld = touchStates[laneIdx];
         activeTouches.set(t.identifier, laneIdx);
         changed = true;
+        if (laneAlreadyHeld) {
+          triggerLaneHit(laneIdx);
+        }
       }
     }
   }
