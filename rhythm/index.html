@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- 頂部狀態列 -->
   <header class="top-bar">
     <button id="back-lobby-btn" class="cyber-btn small">⬅ 返回大廳</button>
     <div id="user-badge" class="user-badge">訪客模式</div>
@@ -16,7 +17,7 @@
   <!-- 選單與曲目選擇畫面 -->
   <main id="menu-screen" class="menu-screen">
     <h1 class="game-title">CYBER BEAT</h1>
-    <p class="subtitle">支援 PC 鍵盤 (S D F Space J K L) 與手機多點觸控</p>
+    <p class="subtitle">支援 PC 鍵盤 (S D F Space J K L) 與平板/手機多點觸控</p>
 
     <!-- 曲目選擇列表 -->
     <div class="control-group song-group">
@@ -51,7 +52,7 @@
     <button id="start-btn" class="cyber-btn primary">▶ 開始演奏</button>
   </main>
 
-  <!-- 遊戲主舞台 -->
+  <!-- 遊戲主舞台（橫向全螢幕寬軌道） -->
   <section id="game-screen" class="game-screen" style="display:none;">
     <div class="hud">
       <div class="song-info-hud" id="hud-song-title">SONG TITLE [Lv.3]</div>
@@ -76,6 +77,7 @@
       <p id="res-song" class="res-song-title">Song Name</p>
       <p>模式：<span id="res-mode">4K</span> | 難度：<span id="res-lv">Lv.3</span></p>
       <p class="res-score-big">最終分數：<span id="res-score">0</span></p>
+      <p id="res-best-notice" class="res-best-notice"></p>
       <p>最大連擊：<span id="res-max-combo">0</span></p>
       <p>PERFECT: <span id="res-perfect">0</span> | GOOD: <span id="res-good">0</span> | MISS: <span id="res-miss">0</span></p>
       <div class="modal-actions">
