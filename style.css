@@ -214,3 +214,16 @@ h3 {
 }
 
 .submit-btn.reg { background: #ff9800; }
+/* 跑酷遊戲專屬橘紅主題 */
+.game-card-btn.parkour-theme {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  border-color: #f97316;
+}
+.game-card-btn.parkour-theme:active,
+.game-card-btn.parkour-theme:hover {
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.28);
+  background: linear-gradient(135deg, #ffedd5 0%, #ffffff 100%);
+}
+.game-card-btn.parkour-theme strong {
+  color: #ea580c;
+}
