@@ -23,9 +23,7 @@ const THEMES = [
     bgNear: '#064e3b',
     groundFill: '#291d18',
     groundTop: '#22c55e',
-    ambientColor: 'rgba(167, 243, 208, 0.45)', // 螢火蟲光點
-    groundObsType: 'tree',   // 帶刺古樹樁
-    airObsType: 'bird'       // 波浪飛行飛鳥
+    ambientColor: 'rgba(167, 243, 208, 0.45)'
   },
   {
     name: '🌋 熔岩火山',
@@ -35,9 +33,7 @@ const THEMES = [
     bgNear: '#450a0a',
     groundFill: '#1c1917',
     groundTop: '#f97316',
-    ambientColor: 'rgba(251, 146, 60, 0.65)',  // 飄升火星
-    groundObsType: 'geyser', // 脈動岩漿噴泉
-    airObsType: 'meteor'     // 旋轉燃燒隕石
+    ambientColor: 'rgba(251, 146, 60, 0.65)'
   },
   {
     name: '🏙️ 霓虹城市',
@@ -47,9 +43,7 @@ const THEMES = [
     bgNear: '#0f172a',
     groundFill: '#0f172a',
     groundTop: '#38bdf8',
-    ambientColor: 'rgba(56, 189, 248, 0.4)',   // 霓虹光雨
-    groundObsType: 'tesla',  // 高壓電弧柵欄
-    airObsType: 'drone'      // 雷射巡邏無人機
+    ambientColor: 'rgba(56, 189, 248, 0.4)'
   }
 ];
 
@@ -67,8 +61,8 @@ let screenShake = 0;
 // 物理常數
 const GRAVITY = 0.65;
 const FAST_FALL_SPEED = 25;
-const JUMP_FORCE = -12.6;
-const DOUBLE_JUMP_FORCE = -11.6;
+const JUMP_FORCE = -12.8;
+const DOUBLE_JUMP_FORCE = -11.8;
 const GROUND_Y = 340;
 
 // 火柴人玩家物件
@@ -93,7 +87,7 @@ const player = {
   invincibleTimer: 0,
   runCycle: 0,
   flipAngle: 0,
-  afterimages: [] // 殘影紀錄
+  afterimages: []
 };
 
 let platforms = [];
@@ -102,7 +96,6 @@ let particles = [];
 let bgElements = [];
 let ambientParticles = [];
 
-// 初始化背景遠景剪影（全部延伸至畫布底部）
 function initBackground() {
   bgElements = [];
   for (let i = 0; i < 14; i++) {
@@ -110,7 +103,7 @@ function initBackground() {
       x: i * 85,
       w: 65 + Math.random() * 65,
       h: 110 + Math.random() * 140,
-      layer: i % 2 // 0: 遠景, 1: 中景
+      layer: i % 2
     });
   }
 
@@ -230,14 +223,235 @@ function spawnParticles(x, y, color, count) {
   }
 }
 
-// 生成地形與主題專屬動態障礙物
+// 根據當前關卡主題生成多樣化障礙陣型
+function spawnThemeObstacle(xPos, themeIdx) {
+  const roll = Math.random();
+
+  if (themeIdx === 0) {
+    // ================= 🌲 迷霧森林 =================
+    if (roll < 0.35) {
+      // 1. 高低不一的真實大樹（矮樹 52px 一段跳，高樹 96px 必須二段跳！）
+      const isTall = Math.random() < 0.5;
+      const treeH = isTall ? 92 + Math.random() * 10 : 52 + Math.random() * 12;
+      const treeW = isTall ? 54 : 44;
+      obstacles.push({
+        visual: 'real_tree',
+        x: xPos,
+        y: GROUND_Y - treeH,
+        w: treeW,
+        h: treeH,
+        isTall,
+        damage: 25,
+        phase: Math.random() * Math.PI * 2
+      });
+    } else if (roll < 0.65) {
+      // 2. 並排高空飛鳥陣（強制玩家必須下蹲滑行通過！）
+      // 上下兩排封死跳躍空間，只留貼地 34px 滑行通道
+      const count = 3;
+      for (let i = 0; i < count; i++) {
+        // 下排飛鳥（離地 36px，站立必撞、滑行安全）
+        obstacles.push({
+          visual: 'bird',
+          x: xPos + i * 44,
+          baseY: GROUND_Y - 72,
+          y: GROUND_Y - 72,
+          w: 44,
+          h: 34,
+          speedBonus: 1.6,
+          waveAmp: 6,
+          damage: 25,
+          phase: i * 0.7
+        });
+        // 上排飛鳥（封死二段跳空間）
+        obstacles.push({
+          visual: 'bird',
+          x: xPos + i * 44 + 20,
+          baseY: GROUND_Y - 135,
+          y: GROUND_Y - 135,
+          w: 44,
+          h: 34,
+          speedBonus: 1.6,
+          waveAmp: 6,
+          damage: 25,
+          phase: i * 0.7 + 1.5
+        });
+      }
+    } else if (roll < 0.85) {
+      // 3. 森林捕獸夾 / 毒蘑菇叢（小型地面障礙）
+      obstacles.push({
+        visual: 'mushroom_trap',
+        x: xPos,
+        y: GROUND_Y - 34,
+        w: 46,
+        h: 34,
+        damage: 20,
+        phase: Math.random() * Math.PI * 2
+      });
+    } else {
+      // 4. 懸吊擺盪毒藤蔓（從上方垂掛下來，需要滑行鑽過）
+      obstacles.push({
+        visual: 'vine',
+        x: xPos,
+        y: GROUND_Y - 175,
+        w: 32,
+        h: 138, // 底部離地 37px，剛好讓滑行(25px)鑽過
+        damage: 25,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+  } else if (themeIdx === 1) {
+    // ================= 🌋 熔岩火山 =================
+    if (roll < 0.35) {
+      // 1. 高低錯落黑曜石結晶峰（有高有低）
+      const isTall = Math.random() < 0.5;
+      const h = isTall ? 88 : 48;
+      obstacles.push({
+        visual: 'obsidian',
+        x: xPos,
+        y: GROUND_Y - h,
+        w: 48,
+        h: h,
+        isTall,
+        damage: 25,
+        phase: 0
+      });
+    } else if (roll < 0.65) {
+      // 2. 高空並排旋轉火輪陣（強制下蹲滑行）
+      for (let i = 0; i < 2; i++) {
+        obstacles.push({
+          visual: 'fire_wheel',
+          x: xPos + i * 56,
+          baseY: GROUND_Y - 78,
+          y: GROUND_Y - 78,
+          w: 44,
+          h: 44,
+          speedBonus: 0.5,
+          waveAmp: 4,
+          damage: 25,
+          phase: i * 1.2
+        });
+        obstacles.push({
+          visual: 'fire_wheel',
+          x: xPos + i * 56 + 25,
+          baseY: GROUND_Y - 140,
+          y: GROUND_Y - 140,
+          w: 44,
+          h: 44,
+          speedBonus: 0.5,
+          waveAmp: 4,
+          damage: 25,
+          phase: i * 1.2 + 1
+        });
+      }
+    } else if (roll < 0.85) {
+      // 3. 脈動噴發岩漿柱
+      obstacles.push({
+        visual: 'geyser',
+        x: xPos,
+        y: GROUND_Y - 54,
+        w: 42,
+        h: 54,
+        damage: 25,
+        phase: Math.random() * Math.PI * 2
+      });
+    } else {
+      // 4. 斜向墜落燃燒隕石
+      obstacles.push({
+        visual: 'meteor',
+        x: xPos + 80,
+        baseY: GROUND_Y - 110,
+        y: GROUND_Y - 110,
+        w: 42,
+        h: 42,
+        speedBonus: 2.8,
+        vyDrop: 1.1, // 邊飛邊往下斜墜
+        waveAmp: 0,
+        damage: 30,
+        phase: 0
+      });
+    }
+
+  } else {
+    // ================= 🏙️ 霓虹城市 =================
+    if (roll < 0.35) {
+      // 1. 高低全息街頭路障 / 雙層貨櫃（有高有低）
+      const isTall = Math.random() < 0.5;
+      const h = isTall ? 86 : 46;
+      obstacles.push({
+        visual: 'container',
+        x: xPos,
+        y: GROUND_Y - h,
+        w: 52,
+        h: h,
+        isTall,
+        damage: 25,
+        phase: 0
+      });
+    } else if (roll < 0.65) {
+      // 2. 雙層無人機雷射封鎖線（強制下蹲滑行）
+      for (let i = 0; i < 2; i++) {
+        obstacles.push({
+          visual: 'drone',
+          x: xPos + i * 58,
+          baseY: GROUND_Y - 76,
+          y: GROUND_Y - 76,
+          w: 48,
+          h: 36,
+          speedBonus: 0.8,
+          waveAmp: 5,
+          damage: 25,
+          phase: i
+        });
+        obstacles.push({
+          visual: 'drone',
+          x: xPos + i * 58,
+          baseY: GROUND_Y - 138,
+          y: GROUND_Y - 138,
+          w: 48,
+          h: 36,
+          speedBonus: 0.8,
+          waveAmp: 5,
+          damage: 25,
+          phase: i + 1.5
+        });
+      }
+    } else if (roll < 0.85) {
+      // 3. 高壓電弧柵欄
+      obstacles.push({
+        visual: 'tesla',
+        x: xPos,
+        y: GROUND_Y - 52,
+        w: 44,
+        h: 52,
+        damage: 25,
+        phase: 0
+      });
+    } else {
+      // 4. 高速追蹤磁浮飛彈（貼中高空高速衝刺）
+      obstacles.push({
+        visual: 'missile',
+        x: xPos + 60,
+        baseY: GROUND_Y - 68,
+        y: GROUND_Y - 68,
+        w: 56,
+        h: 26,
+        speedBonus: 3.6,
+        waveAmp: 2,
+        damage: 30,
+        phase: 0
+      });
+    }
+  }
+}
+
+// 生成地形與障礙物
 function generateWorld() {
-  const theme = THEMES[currentThemeIndex];
   const lastPlat = platforms[platforms.length - 1];
 
-  if (lastPlat.x + lastPlat.w < canvas.width + 300) {
+  if (lastPlat.x + lastPlat.w < canvas.width + 320) {
     const gapWidth = Math.min(185, 95 + Math.random() * (currentSpeed * 6));
-    const platWidth = 400 + Math.random() * 460;
+    const platWidth = 480 + Math.random() * 520;
     const newX = lastPlat.x + lastPlat.w + gapWidth;
 
     platforms.push({
@@ -247,38 +461,20 @@ function generateWorld() {
       themeIndex: currentThemeIndex
     });
 
-    const safeStart = newX + 100;
-    const safeEnd = newX + platWidth - 100;
+    // 若地板夠長，最多可放 2 組有安全間距的障礙物，讓節奏更緊湊豐富
+    const safeStart = newX + 110;
+    const safeEnd = newX + platWidth - 130;
 
-    if (safeEnd - safeStart > 110) {
-      const obsX = safeStart + Math.random() * (safeEnd - safeStart - 60);
-      const isGroundObs = Math.random() < 0.52;
-
-      if (isGroundObs) {
-        obstacles.push({
-          category: 'ground',
-          visual: theme.groundObsType,
-          x: obsX,
-          y: GROUND_Y - 42,
-          w: 42,
-          h: 42,
-          damage: 25,
-          phase: Math.random() * Math.PI * 2
-        });
-      } else {
-        // 空中障礙物（帶波浪飛行弧度）
-        obstacles.push({
-          category: 'air',
-          visual: theme.airObsType,
-          x: obsX,
-          baseY: GROUND_Y - 82, // 基準高度：站立必撞，滑行可過
-          y: GROUND_Y - 82,
-          w: 50,
-          h: 40,
-          damage: 25,
-          phase: Math.random() * Math.PI * 2
-        });
+    if (safeEnd - safeStart > 340) {
+      const firstX = safeStart + Math.random() * 60;
+      const secondX = firstX + 240 + Math.random() * 70;
+      spawnThemeObstacle(firstX, currentThemeIndex);
+      if (secondX < safeEnd) {
+        spawnThemeObstacle(secondX, currentThemeIndex);
       }
+    } else if (safeEnd - safeStart > 100) {
+      const obsX = safeStart + Math.random() * (safeEnd - safeStart - 60);
+      spawnThemeObstacle(obsX, currentThemeIndex);
     }
   }
 }
@@ -297,14 +493,12 @@ function update() {
   frameCount++;
   if (screenShake > 0) screenShake--;
 
-  // 速度逐步加快
   currentSpeed = Math.min(baseSpeed * 2.45, baseSpeed + frameCount * 0.0018);
   distance += currentSpeed * 0.08;
 
   scoreEl.textContent = Math.floor(distance);
   speedEl.textContent = (currentSpeed / baseSpeed).toFixed(1);
 
-  // 每 400 公尺切換主題
   const newThemeIndex = Math.floor(distance / 400) % THEMES.length;
   if (newThemeIndex !== currentThemeIndex) {
     currentThemeIndex = newThemeIndex;
@@ -325,11 +519,11 @@ function update() {
   for (const ap of ambientParticles) {
     ap.x += ap.speedX - currentSpeed * 0.2;
     if (currentThemeIndex === 1) {
-      ap.y -= 1.2; // 火山火星往上飄
+      ap.y -= 1.2;
     } else if (currentThemeIndex === 2) {
-      ap.y += 4.5; // 城市光雨往下落
+      ap.y += 4.5;
     } else {
-      ap.y += Math.sin(frameCount * 0.05 + ap.phase) * 0.6; // 森林螢火蟲漂浮
+      ap.y += Math.sin(frameCount * 0.05 + ap.phase) * 0.6;
     }
 
     if (ap.x < 0) ap.x = canvas.width;
@@ -337,7 +531,7 @@ function update() {
     if (ap.y > canvas.height) ap.y = 0;
   }
 
-  // 紀錄高速殘影（二段跳、滑行或速降時觸發）
+  // 紀錄高速殘影
   if (frameCount % 3 === 0 && (player.isSliding || player.isFastFalling || player.jumpCount === 2 || currentSpeed > baseSpeed * 1.5)) {
     player.afterimages.push({
       x: player.x,
@@ -391,7 +585,7 @@ function update() {
 
       if (player.isFastFalling || (!wasGrounded && player.downHeld)) {
         player.isFastFalling = false;
-        screenShake = 5; // 速降落地微震感
+        screenShake = 5;
         spawnParticles(player.x + player.w / 2, p.y, '#fb923c', 12);
         if (player.downHeld) {
           enterSlideState();
@@ -404,19 +598,17 @@ function update() {
     }
   }
 
-  // 火柴人跑步頻率
+  // 火柴人跑步動畫週期
   if (player.isGrounded && !player.isSliding) {
     player.runCycle += currentSpeed * 0.052;
   } else if (player.jumpCount === 2 && !player.isFastFalling) {
     player.flipAngle += 0.32;
   }
 
-  // 滑行摩擦火花
   if (player.isGrounded && player.isSliding && frameCount % 3 === 0) {
     spawnParticles(player.x + 8, player.y + player.h, '#38bdf8', 1);
   }
 
-  // 掉落坑洞判定
   if (player.y > canvas.height + 20) {
     gameOver('掉進深淵坑洞了！');
     return;
@@ -426,20 +618,18 @@ function update() {
     player.invincibleTimer--;
   }
 
-  // 障礙物更新（含空中波浪弧度飛行）
+  // 障礙物移動與動態軌跡更新
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
-    obs.x -= currentSpeed;
+    obs.x -= currentSpeed + (obs.speedBonus || 0);
 
-    if (obs.category === 'air') {
-      // 飛鳥/無人機在空中帶弧度上下波浪飛行（幅度 14px，依然保持下蹲可安全通過）
-      const waveSpeed = obs.visual === 'bird' ? 0.1 : 0.08;
-      const waveAmp = obs.visual === 'bird' ? 14 : 9;
-      obs.y = obs.baseY + Math.sin(frameCount * waveSpeed + obs.phase) * waveAmp;
-      // 飛鳥額外稍微加快一點水平俯衝速度
-      if (obs.visual === 'bird' || obs.visual === 'meteor') {
-        obs.x -= 1.4;
+    // 空中波浪飛行軌跡
+    if (obs.baseY !== undefined) {
+      if (obs.vyDrop) {
+        obs.baseY = Math.min(GROUND_Y - obs.h, obs.baseY + obs.vyDrop);
       }
+      const amp = obs.waveAmp ?? 0;
+      obs.y = obs.baseY + Math.sin(frameCount * 0.1 + obs.phase) * amp;
     }
 
     if (player.invincibleTimer === 0 && checkCollision(player, obs)) {
@@ -454,7 +644,7 @@ function update() {
       }
     }
 
-    if (obs.x + obs.w < -120) {
+    if (obs.x + obs.w < -160) {
       obstacles.splice(i, 1);
     }
   }
@@ -471,7 +661,7 @@ function update() {
   generateWorld();
 }
 
-// 繪製單一火柴人骨架（可複用於本體與殘影）
+// 繪製單一火柴人骨架
 function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -485,39 +675,31 @@ function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
   const cy = state.y + (state.isSliding ? player.slideH : player.normalH) / 2;
 
   if (state.isSliding) {
-    // --- 極限貼地滑行姿態 ---
     const groundY = state.y + player.slideH;
-    // 頭部低伏靠後
     ctx.beginPath();
     ctx.arc(state.x + 14, groundY - 13, 7.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // 後仰軀幹 + 筆直向前鏟出的雙腿
     ctx.beginPath();
     ctx.moveTo(state.x + 18, groundY - 10);
     ctx.lineTo(state.x + 34, groundY - 4);
     ctx.lineTo(state.x + 56, groundY - 4);
-    // 彎曲支撐腿
     ctx.moveTo(state.x + 34, groundY - 4);
     ctx.lineTo(state.x + 41, groundY - 12);
     ctx.lineTo(state.x + 48, groundY - 5);
-    // 向後張開平衡的手臂
     ctx.moveTo(state.x + 22, groundY - 9);
     ctx.lineTo(state.x + 6, groundY - 5);
     ctx.stroke();
 
   } else {
-    // 二段跳前空翻旋轉
     if (state.jumpCount === 2 && !state.isGrounded && !player.isFastFalling) {
       ctx.translate(cx, cy);
       ctx.rotate(state.flipAngle);
       ctx.translate(-cx, -cy);
     }
 
-    // 跑步時的身體上下起伏微動
     const bob = state.isGrounded ? Math.abs(Math.sin(state.runCycle)) * 3.5 : 0;
 
-    // 身體大幅前傾（營造高速衝刺感！）
     const headX = cx + 11;
     const headY = state.y + 11 + bob;
     const shoulderX = cx + 7;
@@ -525,18 +707,15 @@ function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
     const hipX = cx - 4;
     const hipY = state.y + 39 + bob;
 
-    // 1. 頭部（無頭帶，乾淨俐落）
     ctx.beginPath();
     ctx.arc(headX, headY, 7.8, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. 前傾軀幹
     ctx.beginPath();
     ctx.moveTo(shoulderX, shoulderY);
     ctx.lineTo(hipX, hipY);
     ctx.stroke();
 
-    // 計算四肢衝刺角度
     let legAngle1, legAngle2, armAngle1, armAngle2;
     if (state.isGrounded) {
       legAngle1 = Math.sin(state.runCycle) * 0.95 + 0.15;
@@ -549,14 +728,12 @@ function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
       armAngle1 = -1.2;
       armAngle2 = -1.0;
     } else {
-      // 騰空躍起大跨步
       legAngle1 = 0.85;
       legAngle2 = -0.65;
       armAngle1 = -0.95;
       armAngle2 = 0.85;
     }
 
-    // 3. 雙腿（大腿 + 小腿）
     const thighLen = 11.5;
     const calfLen = 10.5;
     [legAngle1, legAngle2].forEach((angle, idx) => {
@@ -575,7 +752,6 @@ function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
       ctx.stroke();
     });
 
-    // 4. 雙臂（忍者式向後甩臂衝刺）
     const upperArmLen = 9.5;
     const foreArmLen = 9.5;
     [armAngle1, armAngle2].forEach((angle, idx) => {
@@ -598,219 +774,357 @@ function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
 }
 
 function drawStickman() {
-  // 先畫殘影
   for (const img of player.afterimages) {
     renderStickmanPose(img, '#38bdf8', '#0284c7', img.alpha);
   }
 
-  // 再畫本體（受傷閃爍）
   if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 4) % 2 === 1) {
     return;
   }
   renderStickmanPose(player, '#ffffff', '#94a3b8', 1);
 }
 
-// 繪製高動態主題障礙物
+// 繪製所有細緻主題障礙物
 function drawObstacle(obs) {
   ctx.save();
+  const cx = obs.x + obs.w / 2;
+  const cy = obs.y + obs.h / 2;
+
   switch (obs.visual) {
-    case 'tree': // 🌲 森林：帶刺古樹樁（樹根 + 樹皮紋理 + 斷裂枝枒 + 警告紅刺）
-      // 樹幹主體
+    // ================= 🌲 森林障礙物 =================
+    case 'real_tree': {
+      // 真實大樹：抓地樹根 + 粗壯樹幹 + 樹皮紋理 + 多層茂密立體樹冠
+      const trunkW = obs.w * 0.38;
+      const trunkX = cx - trunkW / 2;
+      const crownRadius = obs.w * 0.56;
+      const crownY = obs.y + crownRadius * 0.85;
+
+      // 1. 抓地樹根與樹幹
       ctx.fillStyle = '#5c3a21';
       ctx.beginPath();
-      ctx.moveTo(obs.x + 4, obs.y + obs.h);
-      ctx.lineTo(obs.x + 10, obs.y + 6);
-      ctx.lineTo(obs.x + obs.w - 10, obs.y + 6);
-      ctx.lineTo(obs.x + obs.w - 4, obs.y + obs.h);
+      ctx.moveTo(cx - trunkW * 0.85, obs.y + obs.h);
+      ctx.quadraticCurveTo(trunkX, obs.y + obs.h - 10, trunkX, crownY);
+      ctx.lineTo(trunkX + trunkW, crownY);
+      ctx.quadraticCurveTo(trunkX + trunkW, obs.y + obs.h - 10, cx + trunkW * 0.85, obs.y + obs.h);
       ctx.closePath();
       ctx.fill();
 
-      // 樹皮暗紋
-      ctx.strokeStyle = '#3e2412';
+      // 樹幹垂直紋理
+      ctx.strokeStyle = '#3b2210';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(obs.x + 16, obs.y + 12);
-      ctx.lineTo(obs.x + 15, obs.y + obs.h - 4);
-      ctx.moveTo(obs.x + 25, obs.y + 16);
-      ctx.lineTo(obs.x + 27, obs.y + obs.h - 6);
+      ctx.moveTo(cx - 2, crownY + 8);
+      ctx.lineTo(cx - 3, obs.y + obs.h - 3);
+      ctx.moveTo(cx + 4, crownY + 12);
+      ctx.lineTo(cx + 5, obs.y + obs.h - 4);
       ctx.stroke();
 
-      // 側邊斷枝與綠葉叢
-      ctx.fillStyle = '#15803d';
+      // 2. 多層次立體茂密樹冠（深綠底層 -> 翠綠中層 -> 亮綠高光）
+      ctx.fillStyle = '#14532d';
       ctx.beginPath();
-      ctx.arc(obs.x + 8, obs.y + 16, 8, 0, Math.PI * 2);
-      ctx.arc(obs.x + obs.w - 8, obs.y + 20, 7, 0, Math.PI * 2);
+      ctx.arc(cx - crownRadius * 0.45, crownY + 5, crownRadius * 0.65, 0, Math.PI * 2);
+      ctx.arc(cx + crownRadius * 0.45, crownY + 5, crownRadius * 0.65, 0, Math.PI * 2);
       ctx.fill();
 
-      // 頂部危險紅刺
-      ctx.fillStyle = '#ef4444';
-      for (let i = 0; i < 3; i++) {
-        const sx = obs.x + 11 + i * 10;
-        ctx.beginPath();
-        ctx.moveTo(sx - 4, obs.y + 8);
-        ctx.lineTo(sx, obs.y - 3);
-        ctx.lineTo(sx + 4, obs.y + 8);
-        ctx.fill();
-      }
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath();
+      ctx.arc(cx, crownY - 4, crownRadius * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.arc(cx - crownRadius * 0.22, crownY - 10, crownRadius * 0.42, 0, Math.PI * 2);
+      ctx.fill();
       break;
+    }
 
-    case 'bird': // 🌲 森林：波浪俯衝猛禽飛鳥（雙關節拍翅動畫 + 速度風切線）
-      const bx = obs.x + obs.w / 2;
-      const by = obs.y + obs.h / 2 + 2;
-      const flap = Math.sin(frameCount * 0.42 + obs.phase); // 快速拍翅
+    case 'mushroom_trap': {
+      // 毒蘑菇與荊棘叢
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.arc(cx, obs.y + obs.h, 22, Math.PI, 0);
+      ctx.fill();
 
+      // 兩朵紅底白點毒蘑菇
+      [cx - 10, cx + 10].forEach((mx, idx) => {
+        const mh = idx === 0 ? 22 : 17;
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(mx - 3, obs.y + obs.h - mh, 6, mh);
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(mx, obs.y + obs.h - mh, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(mx - 3, obs.y + obs.h - mh - 4, 2, 0, Math.PI * 2);
+        ctx.arc(mx + 4, obs.y + obs.h - mh - 3, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      break;
+    }
+
+    case 'vine': {
+      // 懸吊擺盪毒藤蔓
+      const sway = Math.sin(frameCount * 0.08 + obs.phase) * 8;
+      ctx.strokeStyle = '#16a34a';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(cx, 0); // 從畫面最頂端垂下
+      ctx.quadraticCurveTo(cx + sway, obs.y + obs.h * 0.5, cx - sway * 0.5, obs.y + obs.h - 10);
+      ctx.stroke();
+
+      // 末端帶刺毒花球
+      const tipX = cx - sway * 0.5;
+      const tipY = obs.y + obs.h - 10;
+      ctx.fillStyle = '#9333ea';
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'bird': {
+      // 雙關節拍翅猛禽飛鳥
+      const flap = Math.sin(frameCount * 0.45 + obs.phase);
       // 尾羽
       ctx.fillStyle = '#b45309';
       ctx.beginPath();
-      ctx.moveTo(bx + 14, by);
-      ctx.lineTo(bx + 28, by - 6);
-      ctx.lineTo(bx + 25, by + 5);
+      ctx.moveTo(cx + 12, cy);
+      ctx.lineTo(cx + 24, cy - 5);
+      ctx.lineTo(cx + 22, cy + 4);
       ctx.fill();
 
-      // 流線鳥身
+      // 鳥身
       ctx.fillStyle = '#f59e0b';
       ctx.beginPath();
-      ctx.ellipse(bx, by, 18, 9, -0.1, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 16, 8, -0.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // 銳利鳥喙與兇狠眼睛
+      // 鳥喙與眼睛
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.moveTo(bx - 16, by - 3);
-      ctx.lineTo(bx - 27, by + 2);
-      ctx.lineTo(bx - 15, by + 4);
+      ctx.moveTo(cx - 14, cy - 2);
+      ctx.lineTo(cx - 24, cy + 2);
+      ctx.lineTo(cx - 13, cy + 4);
       ctx.fill();
 
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(bx - 10, by - 2, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx - 8, cy - 2, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // 雙段式動態拍動翅膀
+      // 拍動翅膀
       ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 3.2;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(bx - 2, by - 2);
-      const midWingY = by - 14 * flap;
-      const tipWingY = by - 24 * flap;
-      ctx.lineTo(bx + 4, midWingY);
-      ctx.lineTo(bx + 14, tipWingY);
+      ctx.moveTo(cx - 2, cy - 2);
+      ctx.lineTo(cx + 4, cy - 13 * flap);
+      ctx.lineTo(cx + 13, cy - 22 * flap);
       ctx.stroke();
       break;
+    }
 
-    case 'geyser': // 🌋 火山：脈動噴發岩漿噴泉
-      const pulse = Math.sin(frameCount * 0.35 + obs.phase) * 6;
-      // 火山底座岩石
+    // ================= 🌋 火山障礙物 =================
+    case 'obsidian': {
+      // 高低錯落黑曜石結晶尖峰
+      ctx.fillStyle = '#1c1917';
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(obs.x, obs.y + obs.h);
+      ctx.lineTo(obs.x + obs.w * 0.3, obs.y + obs.h * 0.35);
+      ctx.lineTo(cx, obs.y);
+      ctx.lineTo(obs.x + obs.w * 0.72, obs.y + obs.h * 0.4);
+      ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 內部高熱熔岩脈絡
+      ctx.strokeStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.moveTo(cx, obs.y + 8);
+      ctx.lineTo(cx - 5, obs.y + obs.h * 0.6);
+      ctx.lineTo(cx + 4, obs.y + obs.h - 4);
+      ctx.stroke();
+      break;
+    }
+
+    case 'geyser': {
+      // 噴發岩漿柱
+      const pulse = Math.sin(frameCount * 0.38 + obs.phase) * 7;
       ctx.fillStyle = '#44403c';
       ctx.beginPath();
       ctx.moveTo(obs.x, obs.y + obs.h);
-      ctx.lineTo(obs.x + 8, obs.y + 24);
-      ctx.lineTo(obs.x + obs.w - 8, obs.y + 24);
+      ctx.lineTo(obs.x + 8, obs.y + obs.h - 16);
+      ctx.lineTo(obs.x + obs.w - 8, obs.y + obs.h - 16);
       ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
       ctx.fill();
 
-      // 噴發岩漿火柱
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.moveTo(obs.x + 8, obs.y + 26);
+      ctx.moveTo(obs.x + 8, obs.y + obs.h - 14);
       ctx.lineTo(obs.x + 12, obs.y + pulse);
-      ctx.lineTo(obs.x + obs.w / 2, obs.y - 6 - pulse);
+      ctx.lineTo(cx, obs.y - 6 - pulse);
       ctx.lineTo(obs.x + obs.w - 12, obs.y + pulse);
-      ctx.lineTo(obs.x + obs.w - 8, obs.y + 26);
+      ctx.lineTo(obs.x + obs.w - 8, obs.y + obs.h - 14);
       ctx.fill();
 
-      // 內部白熱核心
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
-      ctx.moveTo(obs.x + 14, obs.y + 26);
-      ctx.lineTo(obs.x + obs.w / 2, obs.y + 6 - pulse * 0.5);
-      ctx.lineTo(obs.x + obs.w - 14, obs.y + 26);
+      ctx.moveTo(obs.x + 14, obs.y + obs.h - 14);
+      ctx.lineTo(cx, obs.y + 8 - pulse * 0.5);
+      ctx.lineTo(obs.x + obs.w - 14, obs.y + obs.h - 14);
       ctx.fill();
       break;
+    }
 
-    case 'meteor': // 🌋 火山：高速旋轉燃燒隕石
-      const mx = obs.x + 20;
-      const my = obs.y + obs.h / 2;
+    case 'fire_wheel': {
+      // 半空旋轉烈焰齒輪
+      ctx.translate(cx, cy);
+      ctx.rotate(-frameCount * 0.2);
+      ctx.fillStyle = '#ea580c';
+      for (let i = 0; i < 6; i++) {
+        ctx.rotate(Math.PI / 3);
+        ctx.beginPath();
+        ctx.moveTo(-5, -14);
+        ctx.lineTo(0, -23);
+        ctx.lineTo(5, -14);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
 
-      // 火焰尾焰
+    case 'meteor': {
+      // 斜向墜落燃燒隕石
       ctx.fillStyle = 'rgba(249, 115, 22, 0.75)';
       ctx.beginPath();
-      ctx.moveTo(mx, my - 15);
-      ctx.lineTo(mx + 44 + Math.sin(frameCount * 0.6) * 8, my);
-      ctx.lineTo(mx, my + 15);
+      ctx.moveTo(cx - 10, cy - 12);
+      ctx.lineTo(cx + 42, cy - 32);
+      ctx.lineTo(cx + 12, cy + 12);
       ctx.fill();
 
-      // 旋轉隕石本體
-      ctx.translate(mx, my);
-      ctx.rotate(frameCount * 0.15);
+      ctx.translate(cx, cy);
+      ctx.rotate(frameCount * 0.18);
       ctx.fillStyle = '#7c2d12';
       ctx.beginPath();
-      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.arc(0, 0, 17, 0, Math.PI * 2);
       ctx.fill();
-      // 熔岩裂縫
       ctx.strokeStyle = '#facc15';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(-10, -5);
-      ctx.lineTo(2, 3);
+      ctx.lineTo(3, 4);
       ctx.lineTo(11, -6);
-      ctx.moveTo(-4, 11);
-      ctx.lineTo(4, -9);
       ctx.stroke();
       break;
+    }
 
-    case 'tesla': // 🏙️ 城市：雙柱高壓電漿柵欄
+    // ================= 🏙️ 城市障礙物 =================
+    case 'container': {
+      // 高低工業貨櫃 / 全息警戒路障
+      ctx.fillStyle = obs.isTall ? '#1e3a8a' : '#b45309';
+      ctx.strokeStyle = obs.isTall ? '#38bdf8' : '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(obs.x, obs.y, obs.w, obs.h, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // 黃黑斜紋警戒帶
+      ctx.fillStyle = obs.isTall ? '#38bdf8' : '#facc15';
+      ctx.fillRect(obs.x + 4, obs.y + 8, obs.w - 8, 8);
+      if (obs.isTall) {
+        ctx.fillRect(obs.x + 4, obs.y + obs.h / 2, obs.w - 8, 8);
+      }
+      break;
+    }
+
+    case 'tesla': {
+      // 雙柱高壓電弧柵欄
       ctx.fillStyle = '#475569';
       ctx.fillRect(obs.x + 4, obs.y + 6, 8, obs.h - 6);
       ctx.fillRect(obs.x + obs.w - 12, obs.y + 6, 8, obs.h - 6);
 
-      // 頂端發光球
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
       ctx.arc(obs.x + 8, obs.y + 6, 5, 0, Math.PI * 2);
       ctx.arc(obs.x + obs.w - 8, obs.y + 6, 5, 0, Math.PI * 2);
       ctx.fill();
 
-      // 隨機跳動的高壓閃電弧
       ctx.strokeStyle = '#e0f2fe';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(obs.x + 8, obs.y + 12);
-      ctx.lineTo(obs.x + obs.w / 2, obs.y + 12 + (Math.random() - 0.5) * 14);
-      ctx.lineTo(obs.x + obs.w - 8, obs.y + 12);
+      ctx.moveTo(obs.x + 8, obs.y + 14);
+      ctx.lineTo(cx, obs.y + 14 + (Math.random() - 0.5) * 16);
+      ctx.lineTo(obs.x + obs.w - 8, obs.y + 14);
       ctx.stroke();
       break;
+    }
 
-    case 'drone': // 🏙️ 城市：雷射巡邏無人機
-    default:
-      const dx = obs.x + obs.w / 2;
-      const dy = obs.y + obs.h / 2;
+    case 'missile': {
+      // 高速磁浮飛彈
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.roundRect(obs.x + 12, obs.y + 4, obs.w - 18, obs.h - 8, 6);
+      ctx.fill();
 
-      // 頂部高速旋轉螺旋槳
+      // 紅色彈頭
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.moveTo(obs.x + 14, obs.y + 4);
+      ctx.lineTo(obs.x, cy);
+      ctx.lineTo(obs.x + 14, obs.y + obs.h - 4);
+      ctx.fill();
+
+      // 尾端藍色離子推進焰
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(obs.x + obs.w - 6, obs.y + 6);
+      ctx.lineTo(obs.x + obs.w + 18 + Math.random() * 10, cy);
+      ctx.lineTo(obs.x + obs.w - 6, obs.y + obs.h - 6);
+      ctx.fill();
+      break;
+    }
+
+    case 'drone':
+    default: {
+      // 雷射巡邏無人機
       const propW = Math.abs(Math.sin(frameCount * 0.8)) * 22 + 4;
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(dx - propW, dy - 14);
-      ctx.lineTo(dx + propW, dy - 14);
+      ctx.moveTo(cx - propW, cy - 13);
+      ctx.lineTo(cx + propW, cy - 13);
       ctx.stroke();
 
-      // 機身
       ctx.fillStyle = '#312e81';
       ctx.strokeStyle = '#818cf8';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(obs.x + 4, dy - 9, obs.w - 8, 18, 9);
+      ctx.roundRect(obs.x + 4, cy - 8, obs.w - 8, 16, 8);
       ctx.fill();
       ctx.stroke();
 
-      // 紅色掃描雷射眼
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.arc(obs.x + 14, dy, 4, 0, Math.PI * 2);
+      ctx.arc(obs.x + 14, cy, 4, 0, Math.PI * 2);
       ctx.fill();
       break;
+    }
   }
   ctx.restore();
 }
@@ -819,7 +1133,6 @@ function draw() {
   const theme = THEMES[currentThemeIndex];
 
   ctx.save();
-  // 震動特效
   if (screenShake > 0) {
     const sx = (Math.random() - 0.5) * screenShake;
     const sy = (Math.random() - 0.5) * screenShake;
@@ -833,13 +1146,12 @@ function draw() {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 2. 繪製遠景剪影（全部延伸至 canvas.height 底部，避免坑洞處穿幫！）
+  // 2. 遠景剪影（全部延伸至畫布最底端，坑洞處不穿幫）
   for (const bg of bgElements) {
     ctx.fillStyle = bg.layer === 0 ? theme.bgFar : theme.bgNear;
     const topY = GROUND_Y - bg.h;
 
     if (currentThemeIndex === 0) {
-      // 森林：多層次針葉林與下方深林基底（延伸至畫布最底端）
       ctx.fillRect(bg.x, GROUND_Y - 20, bg.w, canvas.height - (GROUND_Y - 20));
       ctx.beginPath();
       ctx.moveTo(bg.x - 10, GROUND_Y);
@@ -847,7 +1159,6 @@ function draw() {
       ctx.lineTo(bg.x + bg.w + 10, GROUND_Y);
       ctx.fill();
     } else if (currentThemeIndex === 1) {
-      // 火山：完整延伸至畫布底部的巨大火山山脈
       ctx.beginPath();
       ctx.moveTo(bg.x - 40, canvas.height);
       ctx.lineTo(bg.x + bg.w * 0.35, topY + 25);
@@ -855,9 +1166,7 @@ function draw() {
       ctx.lineTo(bg.x + bg.w + 40, canvas.height);
       ctx.fill();
     } else {
-      // 城市：完整延伸至畫布底部的摩天大樓群
       ctx.fillRect(bg.x, topY, bg.w, canvas.height - topY);
-      // 大樓亮燈窗戶點綴
       if (bg.layer === 1) {
         ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
         for (let wy = topY + 14; wy < GROUND_Y - 10; wy += 22) {
@@ -868,11 +1177,11 @@ function draw() {
     }
   }
 
-  // 3. 繪製環境氛圍微粒（螢火蟲 / 火星 / 光雨）
+  // 3. 環境氛圍微粒
   ctx.fillStyle = theme.ambientColor;
   for (const ap of ambientParticles) {
     if (currentThemeIndex === 2) {
-      ctx.fillRect(ap.x, ap.y, 1.5, 12); // 雨絲
+      ctx.fillRect(ap.x, ap.y, 1.5, 12);
     } else {
       ctx.beginPath();
       ctx.arc(ap.x, ap.y, ap.size, 0, Math.PI * 2);
@@ -880,7 +1189,7 @@ function draw() {
     }
   }
 
-  // 4. 繪製地板
+  // 4. 地板
   for (const p of platforms) {
     const pTheme = THEMES[p.themeIndex ?? currentThemeIndex];
     ctx.fillStyle = pTheme.groundFill;
@@ -889,15 +1198,15 @@ function draw() {
     ctx.fillRect(p.x, p.y, p.w, 6);
   }
 
-  // 5. 繪製障礙物
+  // 5. 障礙物
   for (const obs of obstacles) {
     drawObstacle(obs);
   }
 
-  // 6. 繪製火柴人玩家
+  // 6. 火柴人玩家
   drawStickman();
 
-  // 7. 繪製玩家頭頂血條
+  // 7. 玩家頭頂血條
   const barW = 48;
   const barH = 7;
   const barX = player.x + (player.w - barW) / 2;
@@ -910,7 +1219,7 @@ function draw() {
   ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : hpRatio > 0.25 ? '#eab308' : '#ef4444';
   ctx.fillRect(barX, barY, barW * hpRatio, barH);
 
-  // 8. 繪製粒子
+  // 8. 粒子特效
   for (const pt of particles) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
@@ -950,7 +1259,6 @@ function gameOver(reason) {
 
 startBtn.addEventListener('click', startGame);
 
-// 電腦鍵盤控制
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
     e.preventDefault();
@@ -967,7 +1275,6 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// 手機/iPad 觸控按鈕控制
 btnJump.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   btnJump.classList.add('active');
