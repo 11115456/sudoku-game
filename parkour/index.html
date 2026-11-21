@@ -11,6 +11,7 @@
     <div class="top-bar">
       <a href="../index.html" class="back-btn">⬅ 返回大廳</a>
       <div class="stats">
+        <span id="theme-badge" class="theme-badge">🌲 迷霧森林</span>
         <span>距離: <strong id="score">0</strong> m</span>
         <span>速度: <strong id="speed-display">1.0</strong>x</span>
       </div>
@@ -21,10 +22,10 @@
 
       <!-- 開始 / 結束 覆蓋層 -->
       <div id="overlay" class="overlay">
-        <h2 id="overlay-title">🏃‍♂️ 極限跑酷大冒險</h2>
+        <h2 id="overlay-title">🥷 極限跑酷大冒險</h2>
         <p id="overlay-desc">
-          電腦：[W / ↑ / 空白鍵] 跳躍(可二段跳) ｜ [S / ↓] 長按滑行下蹲<br>
-          平板/手機：點擊畫面下方左右按鈕操作
+          電腦：[W / ↑ / 空白鍵] 跳躍(可二段跳) ｜ [S / ↓] 空中速降 / 貼地滑行<br>
+          平板/手機：點擊畫面下方左右按鈕操作（每 400m 切換關卡主題）
         </p>
         <p id="final-score" class="final-score" style="display: none;"></p>
         <button id="start-btn" class="start-btn">開始奔跑</button>
@@ -33,7 +34,7 @@
 
     <!-- 手機/iPad 雙手觸控區 -->
     <div class="touch-controls">
-      <button id="btn-slide" class="ctrl-btn slide-btn">⬇️ 下蹲滑行 (按住)</button>
+      <button id="btn-slide" class="ctrl-btn slide-btn">⬇️ 速降 / 滑行 (按住)</button>
       <button id="btn-jump" class="ctrl-btn jump-btn">⬆️ 跳躍 / 二段跳</button>
     </div>
   </div>
@@ -41,4 +42,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
