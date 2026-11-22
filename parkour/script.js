@@ -107,7 +107,7 @@ function lerpColor(c1, c2, t) {
 }
 
 // ==========================================
-// 2. 遊戲全域狀態與拉近後的鏡頭參數 (640x360)
+// 2. 遊戲全域狀態與拉近鏡頭參數 (640x360)
 // ==========================================
 let isPlaying = false;
 let animationId;
@@ -120,16 +120,21 @@ let screenShake = 0;
 
 let activeThemeIdx = 0;
 let prevThemeIdx = 0;
-let themeTransition = 1; // 0 ~ 1 平滑過渡進度
+let themeTransition = 1;
 
-const GROUND_Y = 296;
+const GROUND_Y = 304;
 const GRAVITY = 0.62;
 const FAST_FALL_SPEED = 23;
-const JUMP_FORCE = -11.8;
-const DOUBLE_JUMP_FORCE = -10.8;
+const JUMP_FORCE = -11.6;
+const DOUBLE_JUMP_FORCE = -10.6;
+
+// 三層疊疊樂浮板標準高度（讓玩家可從地面 -> 1層 -> 2層 -> 3層逐層跳躍）
+const LAYER_1_Y = GROUND_Y - 68;   // 236
+const LAYER_2_Y = GROUND_Y - 134;  // 170
+const LAYER_3_Y = GROUND_Y - 198;  // 106
 
 const player = {
-  x: 92,
+  x: 96,
   y: GROUND_Y - 52,
   normalW: 30,
   normalH: 52,
@@ -143,6 +148,8 @@ const player = {
   downHeld: false,
   isFastFalling: false,
   isGrounded: true,
+  standingPad: null,     // 目前腳下踩著哪一塊浮板（null 代表在主地面或空中）
+  dropThroughPad: null,  // 剛按下蹲主動穿過的浮板（避免同一幀重複判定）
   hp: 100,
   maxHp: 100,
   invincibleTimer: 0,
@@ -158,6 +165,7 @@ let floatPads = [];
 let obstacles = [];
 let collectibles = [];
 let particles = [];
+let bgClouds = [];
 let bgFarItems = [];
 let bgNearItems = [];
 let groundProps = [];
@@ -165,25 +173,34 @@ let ambientParticles = [];
 let worldCursorX = 0;
 
 function initBackground() {
+  bgClouds = [];
   bgFarItems = [];
   bgNearItems = [];
   groundProps = [];
   ambientParticles = [];
 
-  for (let i = 0; i < 12; i++) {
-    bgFarItems.push({
-      x: i * 75,
-      w: 55 + Math.random() * 55,
-      h: 95 + Math.random() * 110
-    });
-    bgNearItems.push({
-      x: i * 65,
-      w: 45 + Math.random() * 50,
-      h: 55 + Math.random() * 75
+  for (let i = 0; i < 8; i++) {
+    bgClouds.push({
+      x: i * 110,
+      y: 25 + Math.random() * 65,
+      w: 50 + Math.random() * 55
     });
   }
 
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 16; i++) {
+    bgFarItems.push({
+      x: i * 55,
+      w: 50 + Math.random() * 50,
+      h: 100 + Math.random() * 115
+    });
+    bgNearItems.push({
+      x: i * 48,
+      w: 42 + Math.random() * 44,
+      h: 55 + Math.random() * 80
+    });
+  }
+
+  for (let i = 0; i < 32; i++) {
     ambientParticles.push({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
@@ -220,6 +237,9 @@ function initWorld() {
   player.isSliding = false;
   player.downHeld = false;
   player.isFastFalling = false;
+  player.isGrounded = true;
+  player.standingPad = null;
+  player.dropThroughPad = null;
   player.w = player.normalW;
   player.h = player.normalH;
   player.hp = player.maxHp;
@@ -232,97 +252,151 @@ function initWorld() {
 
   initBackground();
 
-  addPlatformSegment(0, 760, 0);
-  spawnCoinArc(280, GROUND_Y - 35, 5, 32, 'small', 0);
-  worldCursorX = 760;
+  // 起跑跑道 + 引導浮板
+  addPlatformSegment(0, 720, 0);
+  addCoinLine(220, GROUND_Y - 18, 5, 28, 'small');
+  addFloatPad(420, LAYER_1_Y, 150, 0);
+  addCoinLine(440, LAYER_1_Y - 18, 4, 30, 'medium');
+  worldCursorX = 720;
 
-  while (worldCursorX < canvas.width + 900) {
+  while (worldCursorX < canvas.width + 950) {
     appendNextTemplate();
   }
 }
 
 // ==========================================
-// 3. 關卡障礙與物件生成輔助函式（含 2~3 種變體）
+// 3. 物理精準金幣與物件生成輔助函式
 // ==========================================
 function addPlatformSegment(x, w, themeIdx) {
   platforms.push({ x, w, y: GROUND_Y, themeIdx });
-  for (let px = x + 25; px < x + w - 25; px += 55 + Math.random() * 65) {
+  // 密集前景小裝飾（草叢、小花、碎石、路標、結晶），讓地面不再空曠
+  for (let px = x + 18; px < x + w - 18; px += 34 + Math.random() * 40) {
     groundProps.push({
       x: px,
       y: GROUND_Y,
-      type: Math.floor(Math.random() * 3),
+      type: Math.floor(Math.random() * 4),
       themeIdx
     });
   }
 }
 
 function addFloatPad(x, y, w, themeIdx) {
-  floatPads.push({ x, y, w, h: 12, themeIdx });
+  floatPads.push({ x, y, w, h: 11, themeIdx });
 }
 
-function addObstacle(themeId, categoryIdx, variant, x, customY = null) {
+function addCoin(x, y, type = 'small') {
+  const value = type === 'large' ? 3 : type === 'medium' ? 2 : 1;
+  const radius = type === 'large' ? 10.5 : type === 'medium' ? 8.2 : 6.2;
+  collectibles.push({
+    kind: 'coin',
+    coinType: type,
+    value,
+    x,
+    y,
+    r: radius,
+    phase: Math.random() * Math.PI * 2
+  });
+}
+
+// 直線整齊排列金幣（貼齊地板或浮板表面）
+function addCoinLine(startX, y, count, spacing, type = 'small') {
+  for (let i = 0; i < count; i++) {
+    addCoin(startX + i * spacing, y, type);
+  }
+}
+
+// 依據「真實遊戲物理重力與當前速度」生成完全吻合跳躍軌跡的金幣拋物線！
+function addPhysicsJumpCoins(takeoffX, startSurfaceY, jumpForce, speed, count = 5, type = 'small') {
+  // 玩家中心點高度 = 表面Y - 26
+  const startCenterY = startSurfaceY - 26;
+  // 計算整段跳躍滯空總幀數 T = 2 * |vy| / g
+  const totalFrames = Math.abs((2 * jumpForce) / GRAVITY);
+
+  for (let i = 0; i < count; i++) {
+    // 取 15% ~ 85% 的滯空區間放置金幣，起跳和落地都有完美手感
+    const ratio = count === 1 ? 0.5 : 0.15 + (i / (count - 1)) * 0.7;
+    const t = totalFrames * ratio;
+    const cx = takeoffX + speed * t;
+    const cy = startCenterY + jumpForce * t + 0.5 * GRAVITY * t * t;
+    addCoin(cx, cy, i === Math.floor(count / 2) && count >= 5 ? 'medium' : type);
+  }
+}
+
+function addSkillOrb(x, y, skill) {
+  collectibles.push({
+    kind: 'skill',
+    skill,
+    x,
+    y,
+    r: 13.5,
+    phase: Math.random() * Math.PI * 2
+  });
+}
+
+// 放置單一障礙物（支援 customSurfaceY 讓障礙物也能直接放在空中浮板上！）
+function addObstacle(themeId, categoryIdx, variant, x, customSurfaceY = GROUND_Y) {
   const specs = {
     forest: [
-      { type: 'f_tree', w: [38, 48, 42][variant], h: [46, 82, 64][variant], air: false },
-      { type: 'f_mushroom', w: [36, 54, 44][variant], h: [28, 34, 42][variant], air: false },
-      { type: 'f_trap', w: [34, 52, 40][variant], h: [24, 28, 36][variant], air: false },
-      { type: 'f_bird', w: 40, h: 28, air: true, yOff: [64, 62, 118][variant], speed: [1.2, 1.8, 1.4][variant], wave: 6 },
-      { type: 'f_vine', w: 28, h: [95, 132, 128][variant], air: true, yOff: [155, 166, 164][variant], sway: variant === 2 },
-      { type: 'f_log', w: [34, 38, 46][variant], h: [34, 38, 46][variant], air: false, rollSpeed: [1.0, 2.2, 1.5][variant] }
+      { type: 'f_tree', w: [36, 46, 40][variant], h: [44, 78, 60][variant], air: false },
+      { type: 'f_mushroom', w: [34, 52, 42][variant], h: [26, 32, 38][variant], air: false },
+      { type: 'f_trap', w: [34, 50, 38][variant], h: [24, 28, 34][variant], air: false },
+      { type: 'f_bird', w: 38, h: 26, air: true, yOff: [60, 58, 114][variant], speed: [1.1, 1.6, 1.3][variant], wave: 5 },
+      { type: 'f_vine', w: 26, h: [92, 128, 124][variant], air: true, yOff: [150, 162, 160][variant], sway: variant === 2 },
+      { type: 'f_log', w: [32, 36, 44][variant], h: [32, 36, 44][variant], air: false, rollSpeed: [0.9, 2.0, 1.4][variant] }
     ],
     suburb: [
-      { type: 's_fence', w: [42, 46, 56][variant], h: [42, 76, 58][variant], air: false },
-      { type: 's_hydrant', w: [30, 48, 34][variant], h: [36, 44, 68][variant], air: false },
-      { type: 's_sign', w: [32, 36, 48][variant], h: [44, 80, 62][variant], air: false },
-      { type: 's_kite', w: 42, h: 30, air: true, yOff: [64, 118, 66][variant], speed: [1.0, 1.2, 1.6][variant], wave: 8 },
-      { type: 's_wire', w: 54, h: 34, air: true, yOff: [68, 64, 115][variant], speed: 0, wave: 0 },
-      { type: 's_mower', w: [42, 46, 50][variant], h: [30, 32, 36][variant], air: false, rollSpeed: [1.4, 2.6, 2.0][variant] }
+      { type: 's_fence', w: [40, 44, 54][variant], h: [40, 74, 56][variant], air: false },
+      { type: 's_hydrant', w: [28, 46, 32][variant], h: [34, 42, 64][variant], air: false },
+      { type: 's_sign', w: [30, 34, 46][variant], h: [42, 76, 58][variant], air: false },
+      { type: 's_kite', w: 40, h: 28, air: true, yOff: [60, 114, 62][variant], speed: [0.9, 1.1, 1.5][variant], wave: 7 },
+      { type: 's_wire', w: 50, h: 32, air: true, yOff: [64, 60, 112][variant], speed: 0, wave: 0 },
+      { type: 's_mower', w: [40, 44, 48][variant], h: [28, 30, 34][variant], air: false, rollSpeed: [1.3, 2.4, 1.8][variant] }
     ],
     ancient: [
-      { type: 'a_pillar', w: [36, 42, 54][variant], h: [48, 84, 62][variant], air: false },
-      { type: 'a_statue', w: [38, 44, 58][variant], h: [44, 74, 52][variant], air: false },
-      { type: 'a_spikes', w: [40, 62, 48][variant], h: [26, 30, 38][variant], air: false },
-      { type: 'a_arrow', w: 46, h: 22, air: true, yOff: [60, 114, 62][variant], speed: [2.2, 2.0, 3.4][variant], wave: 2 },
-      { type: 'a_bell', w: 38, h: [90, 128, 124][variant], air: true, yOff: [152, 162, 160][variant], sway: variant === 2 },
-      { type: 'a_wheel', w: [40, 52, 44][variant], h: [40, 52, 44][variant], air: false, rollSpeed: [1.2, 1.0, 2.4][variant] }
+      { type: 'a_pillar', w: [34, 40, 52][variant], h: [46, 80, 58][variant], air: false },
+      { type: 'a_statue', w: [36, 42, 54][variant], h: [42, 70, 50][variant], air: false },
+      { type: 'a_spikes', w: [38, 58, 46][variant], h: [24, 28, 36][variant], air: false },
+      { type: 'a_arrow', w: 44, h: 20, air: true, yOff: [58, 112, 60][variant], speed: [2.0, 1.8, 3.0][variant], wave: 2 },
+      { type: 'a_bell', w: 36, h: [88, 124, 120][variant], air: true, yOff: [148, 158, 156][variant], sway: variant === 2 },
+      { type: 'a_wheel', w: [38, 48, 42][variant], h: [38, 48, 42][variant], air: false, rollSpeed: [1.1, 0.9, 2.2][variant] }
     ],
     mountain: [
-      { type: 'm_rock', w: [42, 50, 62][variant], h: [46, 82, 60][variant], air: false },
-      { type: 'm_ice', w: [36, 40, 58][variant], h: [40, 74, 46][variant], air: false },
-      { type: 'm_post', w: [32, 50, 56][variant], h: [42, 48, 56][variant], air: false },
-      { type: 'm_eagle', w: 44, h: 30, air: true, yOff: [64, 118, 66][variant], speed: [1.5, 1.3, 2.3][variant], wave: 8 },
-      { type: 'm_icicle', w: 32, h: [92, 130, 126][variant], air: true, yOff: [154, 164, 162][variant], sway: false },
-      { type: 'm_boulder', w: [36, 48, 40][variant], h: [36, 48, 40][variant], air: false, rollSpeed: [1.5, 1.2, 2.5][variant] }
+      { type: 'm_rock', w: [40, 48, 58][variant], h: [44, 78, 58][variant], air: false },
+      { type: 'm_ice', w: [34, 38, 54][variant], h: [38, 70, 44][variant], air: false },
+      { type: 'm_post', w: [30, 48, 52][variant], h: [40, 46, 54][variant], air: false },
+      { type: 'm_eagle', w: 42, h: 28, air: true, yOff: [60, 114, 62][variant], speed: [1.4, 1.2, 2.1][variant], wave: 7 },
+      { type: 'm_icicle', w: 30, h: [88, 126, 122][variant], air: true, yOff: [150, 160, 158][variant], sway: false },
+      { type: 'm_boulder', w: [34, 46, 38][variant], h: [34, 46, 38][variant], air: false, rollSpeed: [1.4, 1.1, 2.3][variant] }
     ],
     volcano: [
-      { type: 'v_obsidian', w: [40, 48, 60][variant], h: [46, 82, 62][variant], air: false },
-      { type: 'v_geyser', w: [36, 40, 58][variant], h: [44, 76, 48][variant], air: false },
-      { type: 'v_totem', w: [34, 52, 38][variant], h: [48, 56, 78][variant], air: false },
-      { type: 'v_wheel', w: 40, h: 40, air: true, yOff: [68, 122, 68][variant], speed: [0.8, 0.8, 1.5][variant], wave: 4 },
-      { type: 'v_meteor', w: 38, h: 38, air: true, yOff: [68, 120, 105][variant], speed: [2.0, 1.8, 2.8][variant], drop: variant === 2 ? 0.9 : 0 },
-      { type: 'v_lavaball', w: [34, 46, 38][variant], h: [34, 46, 38][variant], air: false, rollSpeed: [1.6, 1.2, 2.8][variant] }
+      { type: 'v_obsidian', w: [38, 46, 56][variant], h: [44, 78, 58][variant], air: false },
+      { type: 'v_geyser', w: [34, 38, 54][variant], h: [42, 72, 46][variant], air: false },
+      { type: 'v_totem', w: [32, 48, 36][variant], h: [46, 54, 74][variant], air: false },
+      { type: 'v_wheel', w: 38, h: 38, air: true, yOff: [64, 118, 64][variant], speed: [0.7, 0.7, 1.4][variant], wave: 4 },
+      { type: 'v_meteor', w: 36, h: 36, air: true, yOff: [64, 116, 100][variant], speed: [1.8, 1.6, 2.5][variant], drop: variant === 2 ? 0.8 : 0 },
+      { type: 'v_lavaball', w: [32, 44, 36][variant], h: [32, 44, 36][variant], air: false, rollSpeed: [1.5, 1.1, 2.6][variant] }
     ],
     city: [
-      { type: 'c_container', w: [46, 48, 64][variant], h: [44, 80, 50][variant], air: false },
-      { type: 'c_tesla', w: [38, 42, 58][variant], h: [46, 78, 52][variant], air: false },
-      { type: 'c_barrier', w: [36, 56, 38][variant], h: [38, 42, 74][variant], air: false },
-      { type: 'c_drone', w: 44, h: 30, air: true, yOff: [64, 118, 66][variant], speed: [1.0, 1.0, 1.7][variant], wave: 6 },
-      { type: 'c_missile', w: 50, h: 24, air: true, yOff: [60, 114, 62][variant], speed: [2.8, 2.4, 4.0][variant], wave: 2 },
-      { type: 'c_bot', w: [40, 52, 42][variant], h: [30, 38, 32][variant], air: false, rollSpeed: [1.5, 1.1, 2.9][variant] }
+      { type: 'c_container', w: [44, 46, 60][variant], h: [42, 76, 48][variant], air: false },
+      { type: 'c_tesla', w: [36, 40, 54][variant], h: [44, 74, 50][variant], air: false },
+      { type: 'c_barrier', w: [34, 52, 36][variant], h: [36, 40, 70][variant], air: false },
+      { type: 'c_drone', w: 42, h: 28, air: true, yOff: [60, 114, 62][variant], speed: [0.9, 0.9, 1.6][variant], wave: 5 },
+      { type: 'c_missile', w: 48, h: 22, air: true, yOff: [58, 110, 60][variant], speed: [2.5, 2.2, 3.6][variant], wave: 2 },
+      { type: 'c_bot', w: [38, 48, 40][variant], h: [28, 36, 30][variant], air: false, rollSpeed: [1.4, 1.0, 2.7][variant] }
     ],
     dream: [
-      { type: 'd_crystal', w: [38, 46, 58][variant], h: [48, 84, 64][variant], air: false },
-      { type: 'd_rift', w: [38, 56, 48][variant], h: [34, 42, 68][variant], air: false },
-      { type: 'd_chess', w: [34, 40, 44][variant], h: [44, 66, 84][variant], air: false },
-      { type: 'd_eye', w: 40, h: 36, air: true, yOff: [66, 120, 68][variant], speed: [1.4, 1.4, 2.2][variant], wave: 9 },
-      { type: 'd_clock', w: 42, h: 42, air: true, yOff: [68, 122, 68][variant], speed: [1.2, 1.2, 2.5][variant], wave: 4 },
-      { type: 'd_orb', w: [36, 44, 40][variant], h: [36, 44, 40][variant], air: false, rollSpeed: [1.8, 2.4, 3.4][variant] }
+      { type: 'd_crystal', w: [36, 44, 54][variant], h: [46, 80, 60][variant], air: false },
+      { type: 'd_rift', w: [36, 52, 46][variant], h: [32, 40, 64][variant], air: false },
+      { type: 'd_chess', w: [32, 38, 42][variant], h: [42, 64, 80][variant], air: false },
+      { type: 'd_eye', w: 38, h: 34, air: true, yOff: [62, 116, 64][variant], speed: [1.3, 1.3, 2.0][variant], wave: 8 },
+      { type: 'd_clock', w: 40, h: 40, air: true, yOff: [64, 118, 64][variant], speed: [1.1, 1.1, 2.3][variant], wave: 4 },
+      { type: 'd_orb', w: [34, 42, 38][variant], h: [34, 42, 38][variant], air: false, rollSpeed: [1.7, 2.2, 3.2][variant] }
     ]
   };
 
   const themeSpecs = specs[themeId] || specs.forest;
   const s = themeSpecs[categoryIdx % themeSpecs.length];
-  const baseY = customY !== null ? customY : (s.air ? GROUND_Y - s.yOff : GROUND_Y - s.h);
+  const baseY = s.air ? customSurfaceY - s.yOff : customSurfaceY - s.h;
 
   obstacles.push({
     visual: s.type,
@@ -341,216 +415,263 @@ function addObstacle(themeId, categoryIdx, variant, x, customY = null) {
   });
 }
 
-function addCoin(x, y, type = 'small') {
-  const value = type === 'large' ? 3 : type === 'medium' ? 2 : 1;
-  const radius = type === 'large' ? 11 : type === 'medium' ? 8.5 : 6.5;
-  collectibles.push({
-    kind: 'coin',
-    coinType: type,
-    value,
-    x,
-    y,
-    r: radius,
-    phase: Math.random() * Math.PI * 2
-  });
-}
-
-function spawnCoinArc(startX, peakY, count, spacing, type = 'small', arcHeight = 45) {
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0.5 : i / (count - 1);
-    const arcY = peakY - Math.sin(t * Math.PI) * arcHeight;
-    addCoin(startX + i * spacing, arcY, type);
-  }
-}
-
-function addSkillOrb(x, y, skill) {
-  collectibles.push({
-    kind: 'skill',
-    skill,
-    x,
-    y,
-    r: 14,
-    phase: Math.random() * Math.PI * 2
-  });
-}
-
 // ==========================================
-// 4. 結構化零無解模板庫（每關 20 個模板：1~7簡單, 8~14中等, 15~20最難）
+// 4. 高操作感、動態速度縮放模板庫（含疊疊樂浮板與精準金幣軌跡）
 // ==========================================
-function buildTemplate(themeId, themeIdx, tplIndex, startX) {
+function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
+  // 依據目前速度縮放水平跨距（速度越快，跳躍水平距離越遠，間距等比例拉大）
+  const S = (val) => Math.round(val * speedRatio);
+  const effSpeed = baseSpeed * speedRatio;
+
   const maybeSpawnSkill = (sx, sy) => {
-    if (Math.random() < 0.22) {
+    if (Math.random() < 0.24) {
       const skills = ['magnet', 'heal', 'triple', 'bomb'];
-      const chosen = skills[Math.floor(Math.random() * skills.length)];
-      addSkillOrb(sx, sy, chosen);
+      addSkillOrb(sx, sy, skills[Math.floor(Math.random() * skills.length)]);
     }
   };
 
   switch (tplIndex) {
     // ---------------- 簡單級模板 (0 ~ 6，對應 1~7 號) ----------------
-    case 0: {
-      addPlatformSegment(startX, 460, themeIdx);
-      addObstacle(themeId, 0, 0, startX + 210);
-      spawnCoinArc(startX + 165, GROUND_Y - 32, 5, 24, 'small', 48);
-      return 460;
+    case 0: { // 單矮障 + 物理精準拋物線金幣
+      const totalW = S(420);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const obsX = startX + S(210);
+      addObstacle(themeId, 0, 0, obsX);
+      // 在障礙物前方起跳點生成吻合真實重力拋物線的金幣
+      addPhysicsJumpCoins(obsX - S(95), GROUND_Y, JUMP_FORCE, effSpeed, 5, 'small');
+      return totalW;
     }
-    case 1: {
-      addPlatformSegment(startX, 480, themeIdx);
-      addObstacle(themeId, 3, 0, startX + 220);
-      spawnCoinArc(startX + 180, GROUND_Y - 14, 5, 24, 'medium', 0);
-      return 480;
+    case 1: { // 高空低飛障礙 + 貼地滑行整齊金幣列
+      const totalW = S(440);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const obsX = startX + S(220);
+      addObstacle(themeId, 3, 0, obsX);
+      addCoinLine(obsX - S(40), GROUND_Y - 13, 5, S(24), 'medium');
+      return totalW;
     }
-    case 2: {
-      addPlatformSegment(startX, 200, themeIdx);
-      spawnCoinArc(startX + 195, GROUND_Y - 40, 4, 26, 'small', 45);
-      addPlatformSegment(startX + 295, 240, themeIdx);
-      maybeSpawnSkill(startX + 410, GROUND_Y - 35);
-      return 535;
+    case 2: { // 雙層疊疊樂浮板（1層 -> 2層階梯跳躍）
+      const totalW = S(520);
+      addPlatformSegment(startX, totalW, themeIdx);
+      // 第一層浮板
+      addFloatPad(startX + S(100), LAYER_1_Y, S(145), themeIdx);
+      addCoinLine(startX + S(115), LAYER_1_Y - 16, 4, S(30), 'small');
+      // 第二層浮板（疊在更高處）
+      addFloatPad(startX + S(270), LAYER_2_Y, S(155), themeIdx);
+      addCoinLine(startX + S(285), LAYER_2_Y - 16, 4, S(32), 'medium');
+      addCoin(startX + S(420), LAYER_2_Y - 22, 'large');
+      return totalW;
     }
-    case 3: {
-      addPlatformSegment(startX, 520, themeIdx);
-      addFloatPad(startX + 150, GROUND_Y - 78, 180, themeIdx);
-      spawnCoinArc(startX + 170, GROUND_Y - 98, 5, 32, 'medium', 0);
-      spawnCoinArc(startX + 170, GROUND_Y - 22, 5, 32, 'small', 0);
-      return 520;
+    case 3: { // 動態寬度深淵坑洞 + 跨坑拋物線金幣
+      const p1W = S(170);
+      const gapW = S(115); // 隨速度自動變寬
+      const p2W = S(210);
+      addPlatformSegment(startX, p1W, themeIdx);
+      addPhysicsJumpCoins(startX + p1W - S(20), GROUND_Y, JUMP_FORCE, effSpeed, 5, 'small');
+      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx);
+      maybeSpawnSkill(startX + p1W + gapW + S(100), GROUND_Y - 26);
+      return p1W + gapW + p2W;
     }
-    case 4: {
-      addPlatformSegment(startX, 580, themeIdx);
-      addObstacle(themeId, 1, 0, startX + 180);
-      spawnCoinArc(startX + 150, GROUND_Y - 30, 3, 25, 'small', 42);
-      addObstacle(themeId, 2, 0, startX + 390);
-      spawnCoinArc(startX + 360, GROUND_Y - 30, 3, 25, 'small', 42);
-      return 580;
+    case 4: { // 雙連矮障快節奏單跳（緊湊操作感）
+      const totalW = S(540);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const obs1 = startX + S(160);
+      const obs2 = startX + S(365);
+      addObstacle(themeId, 1, 0, obs1);
+      addPhysicsJumpCoins(obs1 - S(90), GROUND_Y, JUMP_FORCE, effSpeed, 4, 'small');
+      addObstacle(themeId, 2, 0, obs2);
+      addPhysicsJumpCoins(obs2 - S(90), GROUND_Y, JUMP_FORCE, effSpeed, 4, 'small');
+      return totalW;
     }
-    case 5: {
-      addPlatformSegment(startX, 540, themeIdx);
-      addFloatPad(startX + 120, GROUND_Y - 75, 160, themeIdx);
-      addObstacle(themeId, 5, 0, startX + 340);
-      addCoin(startX + 200, GROUND_Y - 102, 'large');
-      return 540;
+    case 5: { // 浮板上方躲避地面滾石 + 浮板穿層下跳吃大金幣
+      const totalW = S(500);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(90), LAYER_1_Y, S(160), themeIdx);
+      addCoinLine(startX + S(110), LAYER_1_Y - 16, 3, S(34), 'small');
+      addObstacle(themeId, 5, 0, startX + S(310));
+      addCoin(startX + S(370), GROUND_Y - 20, 'large');
+      return totalW;
     }
-    case 6: {
-      addPlatformSegment(startX, 460, themeIdx);
-      addObstacle(themeId, 3, 1, startX + 230);
-      spawnCoinArc(startX + 180, GROUND_Y - 25, 4, 28, 'medium', 0);
-      maybeSpawnSkill(startX + 350, GROUND_Y - 35);
-      return 460;
+    case 6: { // 上下分流選擇：走浮板吃中金幣，或走地面滑行過障礙
+      const totalW = S(480);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(130), LAYER_1_Y, S(190), themeIdx);
+      addCoinLine(startX + S(150), LAYER_1_Y - 16, 4, S(36), 'medium');
+      addObstacle(themeId, 3, 0, startX + S(210));
+      addCoinLine(startX + S(190), GROUND_Y - 13, 3, S(26), 'small');
+      return totalW;
     }
 
     // ---------------- 中等級模板 (7 ~ 13，對應 8~14 號) ----------------
-    case 7: {
-      addPlatformSegment(startX, 520, themeIdx);
-      addObstacle(themeId, 0, 1, startX + 240);
-      spawnCoinArc(startX + 175, GROUND_Y - 45, 5, 30, 'medium', 75);
-      addCoin(startX + 235, GROUND_Y - 125, 'large');
-      return 520;
+    case 7: { // 三層疊疊樂浮板雲梯（1層 -> 2層 -> 3層直衝雲霄！）
+      const totalW = S(640);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(80), LAYER_1_Y, S(130), themeIdx);
+      addCoinLine(startX + S(95), LAYER_1_Y - 16, 3, S(32), 'small');
+
+      addFloatPad(startX + S(235), LAYER_2_Y, S(130), themeIdx);
+      addCoinLine(startX + S(250), LAYER_2_Y - 16, 3, S(32), 'medium');
+
+      addFloatPad(startX + S(390), LAYER_3_Y, S(150), themeIdx);
+      addCoinLine(startX + S(405), LAYER_3_Y - 16, 3, S(34), 'large');
+      maybeSpawnSkill(startX + S(525), LAYER_3_Y - 22);
+      return totalW;
     }
-    case 8: {
-      addPlatformSegment(startX, 560, themeIdx);
-      addObstacle(themeId, 3, 0, startX + 230);
-      addObstacle(themeId, 3, 1, startX + 245);
-      addObstacle(themeId, 3, 0, startX + 285);
-      spawnCoinArc(startX + 200, GROUND_Y - 14, 6, 25, 'medium', 0);
-      return 560;
+    case 8: { // 雙層並排空襲陣（強制滑行）+ 滑行後立刻起跳接浮板
+      const totalW = S(580);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const airX = startX + S(180);
+      addObstacle(themeId, 3, 0, airX);
+      addObstacle(themeId, 3, 1, airX + 15);
+      addObstacle(themeId, 3, 0, airX + S(45));
+      addCoinLine(airX - S(20), GROUND_Y - 13, 5, S(24), 'medium');
+
+      addFloatPad(startX + S(360), LAYER_1_Y, S(140), themeIdx);
+      addCoin(startX + S(430), LAYER_1_Y - 20, 'large');
+      return totalW;
     }
-    case 9: {
-      addPlatformSegment(startX, 620, themeIdx);
-      addObstacle(themeId, 2, 0, startX + 170);
-      addObstacle(themeId, 4, 1, startX + 350);
-      addCoin(startX + 175, GROUND_Y - 75, 'large');
-      spawnCoinArc(startX + 320, GROUND_Y - 14, 4, 24, 'medium', 0);
-      return 620;
+    case 9: { // 高聳巨障（強制二段跳）+ 高空拋物線金幣弧線
+      const totalW = S(520);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const tallX = startX + S(240);
+      addObstacle(themeId, 0, 1, tallX);
+      // 模擬二段跳高度的拋物線金幣
+      addPhysicsJumpCoins(tallX - S(125), GROUND_Y, JUMP_FORCE * 1.38, effSpeed, 6, 'medium');
+      addCoin(tallX + 15, GROUND_Y - 122, 'large');
+      return totalW;
     }
-    case 10: {
-      addPlatformSegment(startX, 640, themeIdx);
-      addFloatPad(startX + 110, GROUND_Y - 72, 140, themeIdx);
-      addFloatPad(startX + 290, GROUND_Y - 132, 160, themeIdx);
-      addObstacle(themeId, 1, 1, startX + 340);
-      spawnCoinArc(startX + 310, GROUND_Y - 154, 4, 32, 'large', 0);
-      maybeSpawnSkill(startX + 490, GROUND_Y - 95);
-      return 640;
+    case 10: { // 浮板＋地面雙重考驗（浮板上有障礙，逼迫玩家按「下蹲」穿過浮板掉回地面！）
+      const totalW = S(620);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(100), LAYER_1_Y, S(340), themeIdx);
+      addCoinLine(startX + S(120), LAYER_1_Y - 16, 3, S(30), 'small');
+      // 在浮板後半段放一個障礙物，逼玩家在浮板上按下蹲穿層往下掉
+      addObstacle(themeId, 1, 0, startX + S(290), LAYER_1_Y);
+      addCoinLine(startX + S(280), GROUND_Y - 16, 4, S(32), 'large');
+      return totalW;
     }
-    case 11: {
-      addPlatformSegment(startX, 180, themeIdx);
-      addFloatPad(startX + 235, GROUND_Y - 58, 120, themeIdx);
-      addCoin(startX + 295, GROUND_Y - 86, 'large');
-      addPlatformSegment(startX + 415, 220, themeIdx);
-      return 635;
+    case 11: { // 寬深淵坑洞 + 雙浮板接力跨海跳
+      const p1W = S(150);
+      const gapTotal = S(310);
+      const p2W = S(180);
+      addPlatformSegment(startX, p1W, themeIdx);
+      addFloatPad(startX + p1W + S(45), LAYER_1_Y + 15, S(95), themeIdx);
+      addCoin(startX + p1W + S(92), LAYER_1_Y - 6, 'medium');
+      addFloatPad(startX + p1W + S(180), LAYER_1_Y - 15, S(95), themeIdx);
+      addCoin(startX + p1W + S(227), LAYER_1_Y - 36, 'large');
+      addPlatformSegment(startX + p1W + gapTotal, p2W, themeIdx);
+      return p1W + gapTotal + p2W;
     }
-    case 12: {
-      addPlatformSegment(startX, 650, themeIdx);
-      addObstacle(themeId, 0, 1, startX + 200);
-      addCoin(startX + 205, GROUND_Y - 122, 'large');
-      addObstacle(themeId, 2, 1, startX + 430);
-      spawnCoinArc(startX + 400, GROUND_Y - 32, 4, 24, 'medium', 45);
-      return 650;
+    case 12: { // 矮障起跳 -> 空中速降接貼地滑行（忍者必須死核心操作連招）
+      const totalW = S(600);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addObstacle(themeId, 2, 0, startX + S(150));
+      addCoin(startX + S(165), GROUND_Y - 72, 'large');
+      addObstacle(themeId, 4, 1, startX + S(330)); // 緊接垂掛藤蔓逼速降滑行
+      addCoinLine(startX + S(300), GROUND_Y - 13, 4, S(24), 'medium');
+      return totalW;
     }
-    case 13: {
-      addPlatformSegment(startX, 600, themeIdx);
-      addFloatPad(startX + 140, GROUND_Y - 75, 260, themeIdx);
-      addObstacle(themeId, 3, 1, startX + 270);
-      spawnCoinArc(startX + 170, GROUND_Y - 92, 5, 36, 'medium', 0);
-      maybeSpawnSkill(startX + 480, GROUND_Y - 35);
-      return 600;
+    case 13: { // 疊疊樂雙層浮板 + 地面火海/尖刺封鎖（必須全程走上層浮板）
+      const totalW = S(620);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addObstacle(themeId, 2, 1, startX + S(190));
+      addObstacle(themeId, 2, 1, startX + S(280));
+      addObstacle(themeId, 2, 1, startX + S(370));
+
+      addFloatPad(startX + S(120), LAYER_1_Y, S(130), themeIdx);
+      addFloatPad(startX + S(290), LAYER_2_Y, S(150), themeIdx);
+      addCoinLine(startX + S(305), LAYER_2_Y - 16, 4, S(32), 'large');
+      maybeSpawnSkill(startX + S(520), GROUND_Y - 26);
+      return totalW;
     }
 
     // ---------------- 最難級模板 (14 ~ 19，對應 15~20 號 & 夢境全模板) ----------------
-    case 14: {
-      addPlatformSegment(startX, 680, themeIdx);
-      for (let k = 0; k < 3; k++) {
-        addObstacle(themeId, 3, 0, startX + 210 + k * 65);
-        addObstacle(themeId, 3, 1, startX + 225 + k * 65);
-      }
-      spawnCoinArc(startX + 200, GROUND_Y - 14, 8, 26, 'large', 0);
-      return 680;
+    case 14: { // 三層疊疊樂極限穿層挑戰（3層 -> 速降停2層 -> 按下蹲穿層落1層 -> 滑行）
+      const totalW = S(720);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(90), LAYER_1_Y, S(120), themeIdx);
+      addFloatPad(startX + S(230), LAYER_2_Y, S(130), themeIdx);
+      addFloatPad(startX + S(380), LAYER_3_Y, S(160), themeIdx);
+
+      addCoinLine(startX + S(395), LAYER_3_Y - 16, 3, S(34), 'large');
+      // 地面下方同步放置高壓封鎖陣，考驗落點精準度
+      addObstacle(themeId, 3, 0, startX + S(480));
+      addObstacle(themeId, 3, 1, startX + S(495));
+      addCoinLine(startX + S(470), GROUND_Y - 13, 4, S(25), 'large');
+      return totalW;
     }
-    case 15: {
-      addPlatformSegment(startX, 160, themeIdx);
-      addFloatPad(startX + 220, GROUND_Y - 55, 100, themeIdx);
-      addCoin(startX + 270, GROUND_Y - 82, 'large');
-      addFloatPad(startX + 390, GROUND_Y - 95, 100, themeIdx);
-      addCoin(startX + 440, GROUND_Y - 122, 'large');
-      addPlatformSegment(startX + 560, 200, themeIdx);
-      maybeSpawnSkill(startX + 640, GROUND_Y - 40);
-      return 760;
+    case 15: { // 無底深淵三連浮板極限跳躍（腳下完全沒有地面！）
+      const p1W = S(140);
+      const gapW = S(440);
+      const p2W = S(160);
+      addPlatformSegment(startX, p1W, themeIdx);
+
+      addFloatPad(startX + p1W + S(45), LAYER_1_Y + 10, S(90), themeIdx);
+      addCoin(startX + p1W + S(90), LAYER_1_Y - 12, 'large');
+
+      addFloatPad(startX + p1W + S(180), LAYER_2_Y + 10, S(90), themeIdx);
+      addCoin(startX + p1W + S(225), LAYER_2_Y - 12, 'large');
+
+      addFloatPad(startX + p1W + S(315), LAYER_1_Y - 10, S(90), themeIdx);
+      addCoin(startX + p1W + S(360), LAYER_1_Y - 32, 'large');
+
+      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx);
+      maybeSpawnSkill(startX + p1W + gapW + S(80), GROUND_Y - 26);
+      return p1W + gapW + p2W;
     }
-    case 16: {
-      addPlatformSegment(startX, 740, themeIdx);
-      addObstacle(themeId, 0, 1, startX + 170);
-      addObstacle(themeId, 4, 1, startX + 350);
-      addObstacle(themeId, 1, 1, startX + 530);
-      addCoin(startX + 175, GROUND_Y - 122, 'large');
-      addCoin(startX + 350, GROUND_Y - 14, 'large');
-      addCoin(startX + 535, GROUND_Y - 115, 'large');
-      return 740;
+    case 16: { // 高障二段跳 -> 空中速降滑行 -> 立刻起跳翻越雙連高障
+      const totalW = S(760);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addObstacle(themeId, 0, 1, startX + S(160));
+      addCoin(startX + S(175), GROUND_Y - 118, 'large');
+
+      addObstacle(themeId, 4, 1, startX + S(340));
+      addCoinLine(startX + S(320), GROUND_Y - 13, 4, S(24), 'large');
+
+      addObstacle(themeId, 1, 1, startX + S(530));
+      addCoin(startX + S(545), GROUND_Y - 115, 'large');
+      return totalW;
     }
-    case 17: {
-      addPlatformSegment(startX, 660, themeIdx);
-      addObstacle(themeId, 2, 1, startX + 260);
-      addObstacle(themeId, 4, 2, startX + 340);
-      spawnCoinArc(startX + 220, GROUND_Y - 40, 5, 28, 'large', 55);
-      return 660;
+    case 17: { // 高速飛彈/隕石＋地面寬陷阱時間差複合陣
+      const totalW = S(660);
+      addPlatformSegment(startX, totalW, themeIdx);
+      const trapX = startX + S(250);
+      addObstacle(themeId, 2, 1, trapX);
+      addObstacle(themeId, 4, 2, trapX + S(95));
+      addPhysicsJumpCoins(trapX - S(95), GROUND_Y, JUMP_FORCE, effSpeed, 5, 'large');
+      return totalW;
     }
-    case 18: {
-      addPlatformSegment(startX, 680, themeIdx);
-      addObstacle(themeId, 2, 1, startX + 200);
-      addObstacle(themeId, 1, 2, startX + 280);
-      addObstacle(themeId, 2, 1, startX + 360);
-      addFloatPad(startX + 150, GROUND_Y - 76, 130, themeIdx);
-      addFloatPad(startX + 320, GROUND_Y - 96, 130, themeIdx);
-      spawnCoinArc(startX + 170, GROUND_Y - 98, 6, 42, 'large', 15);
-      return 680;
+    case 18: { // 雙層浮板＋浮板障礙交錯（逼迫玩家在 1 層與 2 層之間反覆跳躍與穿層下蹲）
+      const totalW = S(720);
+      addPlatformSegment(startX, totalW, themeIdx);
+      addFloatPad(startX + S(100), LAYER_1_Y, S(240), themeIdx);
+      addFloatPad(startX + S(260), LAYER_2_Y, S(260), themeIdx);
+
+      // 1層後半段放障礙，逼玩家跳上 2 層
+      addObstacle(themeId, 2, 0, startX + S(240), LAYER_1_Y);
+      // 2層後半段放障礙，逼玩家在浮板上按下蹲穿層回 1 層或地面
+      addObstacle(themeId, 2, 0, startX + S(430), LAYER_2_Y);
+
+      addCoinLine(startX + S(280), LAYER_2_Y - 16, 3, S(35), 'large');
+      addCoinLine(startX + S(460), GROUND_Y - 16, 4, S(30), 'large');
+      return totalW;
     }
     case 19:
-    default: {
-      addPlatformSegment(startX, 160, themeIdx);
-      addFloatPad(startX + 225, GROUND_Y - 65, 110, themeIdx);
-      addPlatformSegment(startX + 395, 420, themeIdx);
-      addObstacle(themeId, 3, 0, startX + 520);
-      addObstacle(themeId, 5, 2, startX + 680);
-      addCoin(startX + 280, GROUND_Y - 95, 'large');
-      maybeSpawnSkill(startX + 600, GROUND_Y - 35);
-      return 815;
+    default: { // 終極魔王連段：深淵飛躍 -> 疊疊樂浮板 -> 速降滑行隧道 -> 高速滾石
+      const p1W = S(150);
+      const gapW = S(125);
+      const p2W = S(540);
+      addPlatformSegment(startX, p1W, themeIdx);
+      addPhysicsJumpCoins(startX + p1W - S(15), GROUND_Y, JUMP_FORCE, effSpeed, 4, 'medium');
+
+      const p2Start = startX + p1W + gapW;
+      addPlatformSegment(p2Start, p2W, themeIdx);
+      addFloatPad(p2Start + S(60), LAYER_1_Y, S(120), themeIdx);
+      addObstacle(themeId, 3, 0, p2Start + S(230));
+      addObstacle(themeId, 3, 1, p2Start + S(245));
+      addObstacle(themeId, 5, 2, p2Start + S(410));
+      addCoin(p2Start + S(120), LAYER_1_Y - 22, 'large');
+      maybeSpawnSkill(p2Start + S(320), GROUND_Y - 26);
+      return p1W + gapW + p2W;
     }
   }
 }
@@ -561,6 +682,7 @@ function appendNextTemplate() {
     : Math.floor(distance / 1000) % 6;
 
   const themeId = THEMES[targetThemeIdx].id;
+  const speedRatio = currentSpeed / baseSpeed;
 
   let tplIndex;
   if (distance >= 15000) {
@@ -573,13 +695,14 @@ function appendNextTemplate() {
     tplIndex = 14 + Math.floor(Math.random() * 6);
   }
 
-  const widthUsed = buildTemplate(themeId, targetThemeIdx, tplIndex, worldCursorX);
-  const gap = Math.random() < 0.45 ? 0 : (55 + Math.random() * 40);
+  const widthUsed = buildTemplate(themeId, targetThemeIdx, tplIndex, worldCursorX, speedRatio);
+  // 模板間距也隨速度等比例調整
+  const gap = Math.random() < 0.45 ? 0 : Math.round((50 + Math.random() * 35) * speedRatio);
   worldCursorX += widthUsed + gap;
 }
 
 // ==========================================
-// 5. 玩家動作與技能觸發
+// 5. 玩家動作與全新的「浮板兩段式下蹲」邏輯
 // ==========================================
 function doJump() {
   if (!isPlaying) return;
@@ -588,6 +711,7 @@ function doJump() {
   if (player.jumpCount < maxAllowedJumps) {
     if (player.isSliding) stopSlide();
     player.isFastFalling = false;
+    player.standingPad = null;
 
     player.vy = player.jumpCount === 0 ? JUMP_FORCE : DOUBLE_JUMP_FORCE;
     player.jumpCount++;
@@ -604,11 +728,25 @@ function handleDownPress() {
   player.downHeld = true;
 
   if (player.isGrounded) {
-    enterSlideState();
-  } else if (!player.isFastFalling) {
-    player.isFastFalling = true;
-    player.vy = Math.max(player.vy, FAST_FALL_SPEED);
-    spawnParticles(player.x + player.w / 2, player.y, '#38bdf8', 12);
+    // 情況 A：如果玩家正「站在空中浮板上用走的」，按下蹲 -> 主動穿過這塊浮板往下掉！
+    if (player.standingPad !== null) {
+      player.dropThroughPad = player.standingPad;
+      player.standingPad = null;
+      player.isGrounded = false;
+      player.y += 4; // 往下推離浮板表面
+      player.vy = 5;
+      spawnParticles(player.x + player.w / 2, player.y + player.h, '#38bdf8', 6);
+    } else {
+      // 情況 B：在主地面上 -> 進入貼地滑行
+      enterSlideState();
+    }
+  } else {
+    // 情況 C：在半空中按下蹲 -> 啟動速降（遇見空中浮板會先停在浮板上！）
+    if (!player.isFastFalling) {
+      player.isFastFalling = true;
+      player.vy = Math.max(player.vy, FAST_FALL_SPEED);
+      spawnParticles(player.x + player.w / 2, player.y, '#38bdf8', 12);
+    }
   }
 }
 
@@ -690,7 +828,8 @@ function update() {
   frameCount++;
   if (screenShake > 0) screenShake--;
 
-  currentSpeed = Math.min(baseSpeed * 2.35, baseSpeed + frameCount * 0.0015);
+  // 速度平滑遞增（最高達基礎速度的 2.35 倍）
+  currentSpeed = Math.min(baseSpeed * 2.35, baseSpeed + frameCount * 0.0014);
   distance += currentSpeed * 0.085;
 
   scoreEl.textContent = Math.floor(distance);
@@ -724,6 +863,10 @@ function update() {
     buffBarEl.innerHTML = html;
   }
 
+  for (const cl of bgClouds) {
+    cl.x -= currentSpeed * 0.08;
+    if (cl.x + cl.w < -40) cl.x = canvas.width + 40;
+  }
   for (const bg of bgFarItems) {
     bg.x -= currentSpeed * 0.16;
     if (bg.x + bg.w < -30) bg.x = canvas.width + 20;
@@ -767,6 +910,7 @@ function update() {
     if (player.afterimages[i].alpha <= 0) player.afterimages.splice(i, 1);
   }
 
+  // 垂直物理
   if (player.isFastFalling) {
     player.vy = FAST_FALL_SPEED;
     if (frameCount % 2 === 0) {
@@ -779,7 +923,9 @@ function update() {
   player.y += player.vy;
   const wasGrounded = player.isGrounded;
   player.isGrounded = false;
+  player.standingPad = null;
 
+  // 1. 主地面平台碰撞檢測
   for (let i = platforms.length - 1; i >= 0; i--) {
     const p = platforms[i];
     p.x -= currentSpeed;
@@ -796,6 +942,8 @@ function update() {
       player.y = p.y - player.h;
       player.vy = 0;
       player.isGrounded = true;
+      player.standingPad = null;
+      player.dropThroughPad = null;
       player.jumpCount = 0;
 
       if (player.isFastFalling || (!wasGrounded && player.downHeld)) {
@@ -809,6 +957,9 @@ function update() {
     if (p.x + p.w < -120) platforms.splice(i, 1);
   }
 
+  // 2. 空中浮板碰撞檢測：
+  // 空中按下蹲速降時 -> 第一次會穩穩停在浮板上！
+  // 只有已經站在浮板上用走的再按下蹲 (dropThroughPad === fp) -> 才會往下穿過浮板！
   for (let i = floatPads.length - 1; i >= 0; i--) {
     const fp = floatPads[i];
     fp.x -= currentSpeed;
@@ -817,21 +968,35 @@ function update() {
     const prevBottom = playerBottom - player.vy;
 
     if (
-      !player.isFastFalling &&
+      fp !== player.dropThroughPad &&
       player.vy >= 0 &&
       player.x + player.w - 6 > fp.x &&
       player.x + 6 < fp.x + fp.w &&
-      prevBottom <= fp.y + 8 &&
+      prevBottom <= fp.y + 12 &&
       playerBottom >= fp.y
     ) {
       player.y = fp.y - player.h;
       player.vy = 0;
       player.isGrounded = true;
+      player.standingPad = fp;
       player.jumpCount = 0;
-      if (player.downHeld) enterSlideState();
+
+      if (player.isFastFalling) {
+        player.isFastFalling = false;
+        screenShake = 3;
+        spawnParticles(player.x + player.w / 2, fp.y, '#38bdf8', 8);
+      }
+      if (player.downHeld) {
+        enterSlideState();
+      }
     }
 
     if (fp.x + fp.w < -120) floatPads.splice(i, 1);
+  }
+
+  // 若已完全離開剛穿過的浮板，清除標記
+  if (player.dropThroughPad && player.y > player.dropThroughPad.y + 15) {
+    player.dropThroughPad = null;
   }
 
   if (player.isGrounded && !player.isSliding) {
@@ -851,6 +1016,7 @@ function update() {
 
   if (player.invincibleTimer > 0) player.invincibleTimer--;
 
+  // 3. 障礙物更新與碰撞
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
     obs.x -= currentSpeed + (obs.speedBonus || 0);
@@ -877,6 +1043,7 @@ function update() {
     if (obs.x + obs.w < -150) obstacles.splice(i, 1);
   }
 
+  // 4. 金幣與技能球更新
   const pCenterX = player.x + player.w / 2;
   const pCenterY = player.y + player.h / 2;
 
@@ -910,6 +1077,7 @@ function update() {
     if (item.x < -60) collectibles.splice(i, 1);
   }
 
+  // 5. 粒子更新
   for (let i = particles.length - 1; i >= 0; i--) {
     const pt = particles[i];
     pt.x += pt.vx;
@@ -919,13 +1087,13 @@ function update() {
   }
 
   worldCursorX -= currentSpeed;
-  while (worldCursorX < canvas.width + 700) {
+  while (worldCursorX < canvas.width + 750) {
     appendNextTemplate();
   }
 }
 
 // ==========================================
-// 7. 渲染系統（背景、浮板、42種障礙、金幣/技能球、火柴人）
+// 7. 渲染系統（豐富環境層次、浮板、42種障礙、金幣/技能球、火柴人）
 // ==========================================
 function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
   ctx.save();
@@ -1291,7 +1459,7 @@ function drawObstacle(obs) {
 function drawCollectibles() {
   for (const item of collectibles) {
     ctx.save();
-    const bob = Math.sin(frameCount * 0.12 + item.phase) * 3;
+    const bob = Math.sin(frameCount * 0.12 + item.phase) * 2.5;
     const x = item.x;
     const y = item.y + bob;
 
@@ -1359,12 +1527,22 @@ function draw() {
     ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
   }
 
+  // 1. 平滑漸變天空
   const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   bgGrad.addColorStop(0, lerpColor(prevT.skyTop, currT.skyTop, t));
   bgGrad.addColorStop(1, lerpColor(prevT.skyBottom, currT.skyBottom, t));
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // 高空雲層/星雲剪影（填補天空上方空曠感）
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  for (const cl of bgClouds) {
+    ctx.beginPath();
+    ctx.roundRect(cl.x, cl.y, cl.w, 16, 8);
+    ctx.fill();
+  }
+
+  // 2. 遠景山巒/建築剪影（延伸至底部）
   ctx.fillStyle = lerpColor(prevT.bgFar, currT.bgFar, t);
   for (const bg of bgFarItems) {
     const topY = GROUND_Y - bg.h;
@@ -1376,6 +1554,7 @@ function draw() {
     ctx.fill();
   }
 
+  // 3. 中景剪影
   ctx.fillStyle = lerpColor(prevT.bgNear, currT.bgNear, t);
   for (const bg of bgNearItems) {
     const topY = GROUND_Y - bg.h;
@@ -1390,7 +1569,8 @@ function draw() {
     }
   }
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  // 4. 環境氛圍微粒
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
   for (const ap of ambientParticles) {
     if (currT.ambient === 'rain') {
       ctx.fillRect(ap.x, ap.y, 1.5, 10);
@@ -1401,6 +1581,7 @@ function draw() {
     }
   }
 
+  // 5. 地面平台與豐富前景小裝飾
   for (const p of platforms) {
     const pTheme = THEMES[p.themeIdx ?? activeThemeIdx];
     ctx.fillStyle = `rgb(${pTheme.groundFill.join(',')})`;
@@ -1413,30 +1594,45 @@ function draw() {
     const pTheme = THEMES[gp.themeIdx ?? activeThemeIdx];
     ctx.fillStyle = `rgb(${pTheme.groundTop.join(',')})`;
     if (gp.type === 0) {
-      ctx.fillRect(gp.x, gp.y - 5, 3, 5);
-      ctx.fillRect(gp.x + 5, gp.y - 8, 3, 8);
+      ctx.fillRect(gp.x, gp.y - 6, 3, 6);
+      ctx.fillRect(gp.x + 5, gp.y - 10, 3, 10);
+      ctx.fillRect(gp.x + 10, gp.y - 5, 3, 5);
     } else if (gp.type === 1) {
       ctx.beginPath();
-      ctx.arc(gp.x, gp.y, 5, Math.PI, 0);
+      ctx.arc(gp.x, gp.y, 6, Math.PI, 0);
+      ctx.fill();
+    } else if (gp.type === 2) {
+      ctx.fillRect(gp.x, gp.y - 14, 2, 14);
+      ctx.beginPath();
+      ctx.arc(gp.x + 1, gp.y - 15, 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
+  // 6. 空中疊疊樂浮板（帶向下穿層提示箭頭光條）
   for (const fp of floatPads) {
     const fTheme = THEMES[fp.themeIdx ?? activeThemeIdx];
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
     ctx.beginPath();
-    ctx.roundRect(fp.x, fp.y, fp.w, fp.h, 6);
+    ctx.roundRect(fp.x, fp.y, fp.w, fp.h, 5);
     ctx.fill();
 
     ctx.fillStyle = `rgb(${fTheme.groundTop.join(',')})`;
     ctx.fillRect(fp.x + 2, fp.y, fp.w - 4, 4);
+
+    // 浮板底部微光虛線（提示可單向穿透與穿層下跳）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    for (let dx = fp.x + 12; dx < fp.x + fp.w - 12; dx += 18) {
+      ctx.fillRect(dx, fp.y + 7, 8, 2);
+    }
   }
 
+  // 7. 障礙物與金幣/技能球
   for (const obs of obstacles) drawObstacle(obs);
   drawCollectibles();
   drawStickman();
 
+  // 8. 玩家頭頂血條
   const barW = 44;
   const barH = 6;
   const barX = player.x + (player.w - barW) / 2;
@@ -1449,6 +1645,7 @@ function draw() {
   ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : hpRatio > 0.25 ? '#eab308' : '#ef4444';
   ctx.fillRect(barX, barY, barW * hpRatio, barH);
 
+  // 9. 粒子特效
   for (const pt of particles) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
