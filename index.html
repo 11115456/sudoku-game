@@ -5,6 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>綜合遊戲樂園</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* 讓遊戲選擇區塊固定高度並支援上下下拉捲動，後續新增遊戲自動收納 */
+    .game-hall-grid {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 12px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 4px 6px 4px 2px;
+      scroll-behavior: smooth;
+    }
+
+    .game-hall-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .game-hall-grid::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+
+    .game-hall-grid .game-card-btn {
+      width: 100%;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .scroll-hint {
+      font-size: 0.8rem;
+      color: #64748b;
+      font-weight: normal;
+      margin-left: 6px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -17,7 +51,7 @@
         <span id="user-status" class="status-badge offline">🔴 未登入 (進度不會儲存)</span>
       </div>
 
-      <h3>🔥 選擇遊戲</h3>
+      <h3>🔥 選擇遊戲 <span class="scroll-hint">(可上下滑動選擇 ↕)</span></h3>
       <div class="game-hall-grid">
         <!-- 遊戲 1：數獨 -->
         <a href="./sudoku/index.html" class="game-card-btn">
@@ -32,6 +66,15 @@
           <strong>CYBER BEAT 音遊</strong>
           <p>4~7 軌科技節奏打擊（支援 PC 與多點觸控）</p>
         </a>
+
+        <!-- 遊戲 3：跑酷大冒險 -->
+        <a href="./parkour/index.html" class="game-card-btn parkour-theme">
+          <div class="game-icon">🏃‍♂️</div>
+          <strong>極限跑酷大冒險</strong>
+          <p>二段跳與滑行閃避，挑戰極限速度！</p>
+        </a>
+
+        <!-- 👇 以後要新增第 4、第 5 款遊戲，直接貼在這裡上面即可，會自動變成下拉滾動清單！ -->
       </div>
     </div>
 
@@ -65,9 +108,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-<!-- 遊戲 3：跑酷大冒險 -->
-<a href="./parkour/index.html" class="game-card-btn parkour-theme">
-  <div class="game-icon">🏃‍♂️</div>
-  <strong>極限跑酷大冒險</strong>
-  <p>二段跳與滑行閃避，挑戰極限速度！</p>
-</a>
