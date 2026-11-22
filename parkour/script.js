@@ -117,6 +117,7 @@ let baseSpeed = 5.6;
 let currentSpeed = 5.6;
 let frameCount = 0;
 let screenShake = 0;
+let lastJumpFrame = -1;
 
 let activeThemeIdx = 0;
 let prevThemeIdx = 0;
@@ -225,6 +226,7 @@ function initWorld() {
   currentSpeed = baseSpeed;
   frameCount = 0;
   screenShake = 0;
+  lastJumpFrame = -1;
   activeThemeIdx = 0;
   prevThemeIdx = 0;
   themeTransition = 1;
@@ -258,7 +260,7 @@ function initWorld() {
 
   addPlatformSegment(0, 720, 0);
   addCoinLine(210, GROUND_Y - 18, 4, 28, 'small');
-  addSkillOrb(350, GROUND_Y - 26, 'shield'); // 起跑段贈送一顆護盾技能球體驗
+  addSkillOrb(350, GROUND_Y - 26, 'shield');
   addFloatPad(430, LAYER_1_Y, 150, 0);
   addCoinLine(450, LAYER_1_Y - 18, 4, 30, 'medium');
   worldCursorX = 720;
@@ -339,7 +341,7 @@ function randomSkillType() {
   return skills[Math.floor(Math.random() * skills.length)];
 }
 
-// 放置障礙物：variant = 3 為「強制二段跳超高巨障」（高度 126~134px，單跳無法越過！）
+// variant = 3 為「強制二段跳超高巨障」（高度 126~134px，單跳無法越過）
 function addObstacle(themeId, categoryIdx, variant, x, customSurfaceY = GROUND_Y) {
   const specs = {
     forest: [
@@ -431,7 +433,6 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
   const S = (val) => Math.round(val * speedRatio);
   const effSpeed = baseSpeed * speedRatio;
 
-  // 提升技能球在模板內的出現頻率（58%）
   const maybeSpawnSkill = (sx, sy) => {
     if (Math.random() < 0.58) {
       addSkillOrb(sx, sy, randomSkillType());
@@ -439,8 +440,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
   };
 
   switch (tplIndex) {
-    // ---------------- 簡單級模板 (0 ~ 6，對應 1~7 號) ----------------
-    case 0: { // 單矮障 + 正中央對齊拋物線金幣
+    case 0: {
       const totalW = S(460);
       addPlatformSegment(startX, totalW, themeIdx);
       const obs = addObstacle(themeId, 0, 0, startX + S(230));
@@ -448,7 +448,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       maybeSpawnSkill(startX + S(390), GROUND_Y - 26);
       return totalW;
     }
-    case 1: { // 高空低飛障礙 + 貼地滑行正下方整齊金幣列
+    case 1: {
       const totalW = S(460);
       addPlatformSegment(startX, totalW, themeIdx);
       const obs = addObstacle(themeId, 3, 0, startX + S(230));
@@ -458,7 +458,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoinLine(startCoinX, GROUND_Y - 13, coinCount, coinSpacing, 'medium');
       return totalW;
     }
-    case 2: { // 雙層疊疊樂浮板（1層 -> 2層階梯跳躍）
+    case 2: {
       const totalW = S(540);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(100), LAYER_1_Y, S(150), themeIdx);
@@ -468,7 +468,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addSkillOrb(startX + S(430), LAYER_2_Y - 24, randomSkillType());
       return totalW;
     }
-    case 3: { // 動態寬度深淵坑洞 + 正中央對齊跨坑拋物線金幣
+    case 3: {
       const p1W = S(180);
       const gapW = S(120);
       const p2W = S(220);
@@ -479,7 +479,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       maybeSpawnSkill(startX + p1W + gapW + S(110), GROUND_Y - 26);
       return p1W + gapW + p2W;
     }
-    case 4: { // 雙連矮障快節奏單跳
+    case 4: {
       const totalW = S(620);
       addPlatformSegment(startX, totalW, themeIdx);
       const obs1 = addObstacle(themeId, 1, 0, startX + S(180));
@@ -488,7 +488,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCenteredJumpArc(obs2.x + obs2.w / 2, GROUND_Y, JUMP_FORCE, effSpeed, 4, 'small');
       return totalW;
     }
-    case 5: { // 浮板上方躲避地面滾石 + 浮板穿層下跳吃技能球
+    case 5: {
       const totalW = S(520);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(90), LAYER_1_Y, S(165), themeIdx);
@@ -497,7 +497,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addSkillOrb(startX + S(395), GROUND_Y - 26, randomSkillType());
       return totalW;
     }
-    case 6: { // 上下分流選擇：走浮板吃中金幣，或走地面滑行過障礙
+    case 6: {
       const totalW = S(500);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(140), LAYER_1_Y, S(200), themeIdx);
@@ -506,9 +506,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoinLine(obs.x - S(15), GROUND_Y - 13, 3, S(28), 'small');
       return totalW;
     }
-
-    // ---------------- 中等級模板 (7 ~ 13，對應 8~14 號) ----------------
-    case 7: { // 三層疊疊樂浮板雲梯（1層 -> 2層 -> 3層直衝雲霄）
+    case 7: {
       const totalW = S(660);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(80), LAYER_1_Y, S(135), themeIdx);
@@ -522,7 +520,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addSkillOrb(startX + S(548), LAYER_3_Y - 24, randomSkillType());
       return totalW;
     }
-    case 8: { // 雙層並排空襲陣（強制滑行）+ 滑行後立刻起跳接浮板
+    case 8: {
       const totalW = S(600);
       addPlatformSegment(startX, totalW, themeIdx);
       const airX = startX + S(190);
@@ -535,16 +533,16 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoin(startX + S(452), LAYER_1_Y - 20, 'large');
       return totalW;
     }
-    case 9: { // 【強制二段跳超高巨障】單跳絕對過不去，必須二段跳飛躍！
+    case 9: {
       const totalW = S(580);
       addPlatformSegment(startX, totalW, themeIdx);
-      const obs = addObstacle(themeId, 0, 3, startX + S(275)); // variant 3 超高巨障
+      const obs = addObstacle(themeId, 0, 3, startX + S(275));
       addCenteredJumpArc(obs.x + obs.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 5, 'medium');
       addCoin(obs.x + obs.w / 2, GROUND_Y - 155, 'large');
       maybeSpawnSkill(startX + S(480), GROUND_Y - 26);
       return totalW;
     }
-    case 10: { // 浮板＋浮板障礙（逼迫在浮板上再按一下下蹲穿層掉回地面）
+    case 10: {
       const totalW = S(640);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(100), LAYER_1_Y, S(350), themeIdx);
@@ -553,7 +551,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoinLine(startX + S(295), GROUND_Y - 16, 4, S(34), 'large');
       return totalW;
     }
-    case 11: { // 寬深淵坑洞 + 雙浮板接力跨海跳
+    case 11: {
       const p1W = S(160);
       const gapTotal = S(320);
       const p2W = S(190);
@@ -565,7 +563,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addPlatformSegment(startX + p1W + gapTotal, p2W, themeIdx);
       return p1W + gapTotal + p2W;
     }
-    case 12: { // 矮障起跳 -> 空中速降接貼地滑行
+    case 12: {
       const totalW = S(620);
       addPlatformSegment(startX, totalW, themeIdx);
       const obs1 = addObstacle(themeId, 2, 0, startX + S(170));
@@ -574,7 +572,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoinLine(obs2.x - S(20), GROUND_Y - 13, 4, S(24), 'medium');
       return totalW;
     }
-    case 13: { // 疊疊樂雙層浮板 + 地面尖刺封鎖
+    case 13: {
       const totalW = S(640);
       addPlatformSegment(startX, totalW, themeIdx);
       addObstacle(themeId, 2, 1, startX + S(200));
@@ -587,9 +585,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       maybeSpawnSkill(startX + S(540), GROUND_Y - 26);
       return totalW;
     }
-
-    // ---------------- 最難級模板 (14 ~ 19，對應 15~20 號 & 夢境全模板) ----------------
-    case 14: { // 三層疊疊樂極限穿層挑戰
+    case 14: {
       const totalW = S(740);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(90), LAYER_1_Y, S(125), themeIdx);
@@ -602,7 +598,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addCoinLine(startX + S(490), GROUND_Y - 13, 4, S(25), 'large');
       return totalW;
     }
-    case 15: { // 無底深淵三連浮板極限跳躍
+    case 15: {
       const p1W = S(150);
       const gapW = S(450);
       const p2W = S(170);
@@ -620,20 +616,20 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addPlatformSegment(startX + p1W + gapW, p2W, themeIdx);
       return p1W + gapW + p2W;
     }
-    case 16: { // 【強制二段跳雙巨障連跳】中間穿插速降貼地滑行，極致操作連段！
+    case 16: {
       const totalW = S(820);
       addPlatformSegment(startX, totalW, themeIdx);
-      const obs1 = addObstacle(themeId, 0, 3, startX + S(190)); // 強制二段跳巨障 1
+      const obs1 = addObstacle(themeId, 0, 3, startX + S(190));
       addCenteredJumpArc(obs1.x + obs1.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 3, 'large');
 
-      const obs2 = addObstacle(themeId, 4, 1, startX + S(385)); // 速降滑行
+      const obs2 = addObstacle(themeId, 4, 1, startX + S(385));
       addCoinLine(obs2.x - S(20), GROUND_Y - 13, 4, S(24), 'large');
 
-      const obs3 = addObstacle(themeId, 1, 3, startX + S(590)); // 強制二段跳巨障 2
+      const obs3 = addObstacle(themeId, 1, 3, startX + S(590));
       addCenteredJumpArc(obs3.x + obs3.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 3, 'large');
       return totalW;
     }
-    case 17: { // 高速飛彈/隕石＋地面寬陷阱時間差複合陣
+    case 17: {
       const totalW = S(680);
       addPlatformSegment(startX, totalW, themeIdx);
       const obs = addObstacle(themeId, 2, 1, startX + S(270));
@@ -642,7 +638,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       maybeSpawnSkill(startX + S(560), GROUND_Y - 26);
       return totalW;
     }
-    case 18: { // 雙層浮板＋浮板障礙交錯
+    case 18: {
       const totalW = S(740);
       addPlatformSegment(startX, totalW, themeIdx);
       addFloatPad(startX + S(100), LAYER_1_Y, S(250), themeIdx);
@@ -656,7 +652,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       return totalW;
     }
     case 19:
-    default: { // 終極魔王連段（含強制二段跳超高巨障）
+    default: {
       const p1W = S(160);
       const gapW = S(130);
       const p2W = S(580);
@@ -668,7 +664,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addFloatPad(p2Start + S(65), LAYER_1_Y, S(125), themeIdx);
       addObstacle(themeId, 3, 0, p2Start + S(240));
       addObstacle(themeId, 3, 1, p2Start + S(255));
-      const bossTall = addObstacle(themeId, 0, 3, p2Start + S(430)); // 強制二段跳終點巨障
+      const bossTall = addObstacle(themeId, 0, 3, p2Start + S(430));
       addCenteredJumpArc(bossTall.x + bossTall.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 3, 'large');
       addSkillOrb(p2Start + S(127), LAYER_1_Y - 24, randomSkillType());
       return p1W + gapW + p2W;
@@ -688,7 +684,6 @@ function appendNextTemplate() {
   if (distance >= 15000) {
     tplIndex = 10 + Math.floor(Math.random() * 10);
   } else if (distance < 2500) {
-    // 前期也加入 9 號模板，讓玩家早點體驗強制二段跳巨障
     const earlyPool = [0, 1, 2, 3, 4, 5, 6, 9];
     tplIndex = earlyPool[Math.floor(Math.random() * earlyPool.length)];
   } else if (distance < 7500) {
@@ -700,7 +695,6 @@ function appendNextTemplate() {
   const widthUsed = buildTemplate(themeId, targetThemeIdx, tplIndex, worldCursorX, speedRatio);
   const gap = Math.random() < 0.35 ? Math.round(45 * speedRatio) : Math.round((65 + Math.random() * 35) * speedRatio);
 
-  // 額外提升技能球頻率：42% 機率在模板銜接處生成懸浮技能球
   if (Math.random() < 0.42) {
     const orbY = Math.random() < 0.5 ? GROUND_Y - 28 : LAYER_1_Y - 12;
     addSkillOrb(worldCursorX + widthUsed + Math.round(gap * 0.5), orbY, randomSkillType());
@@ -710,13 +704,16 @@ function appendNextTemplate() {
 }
 
 // ==========================================
-// 5. 玩家動作與技能觸發（含護盾免疫三次傷害）
+// 5. 玩家動作與技能觸發（含同幀防連扣跳躍次數與護盾免疫）
 // ==========================================
 function doJump() {
   if (!isPlaying) return;
+  if (frameCount === lastJumpFrame) return;
+
   const maxAllowedJumps = player.tripleJumpTimer > 0 ? 3 : 2;
 
   if (player.jumpCount < maxAllowedJumps) {
+    lastJumpFrame = frameCount;
     if (player.isSliding) stopSlide();
     player.isFastFalling = false;
     player.standingPad = null;
@@ -793,7 +790,7 @@ function triggerSkill(skill) {
     spawnParticles(player.x + 15, player.y + 20, '#c084fc', 18);
   } else if (skill === 'shield') {
     player.shieldCharges = 3;
-    player.shieldTimer = 720; // 12 秒內免疫最多 3 次傷害
+    player.shieldTimer = 720;
     spawnParticles(player.x + 15, player.y + 20, '#38bdf8', 20);
   } else if (skill === 'bomb') {
     screenShake = 14;
@@ -925,7 +922,6 @@ function update() {
     if (player.afterimages[i].alpha <= 0) player.afterimages.splice(i, 1);
   }
 
-  // 垂直物理
   if (player.isFastFalling) {
     player.vy = FAST_FALL_SPEED;
     if (frameCount % 2 === 0) {
@@ -940,7 +936,6 @@ function update() {
   player.isGrounded = false;
   player.standingPad = null;
 
-  // 1. 主地面平台碰撞檢測
   for (let i = platforms.length - 1; i >= 0; i--) {
     const p = platforms[i];
     p.x -= currentSpeed;
@@ -972,7 +967,6 @@ function update() {
     if (p.x + p.w < -120) platforms.splice(i, 1);
   }
 
-  // 2. 空中浮板碰撞檢測
   for (let i = floatPads.length - 1; i >= 0; i--) {
     const fp = floatPads[i];
     fp.x -= currentSpeed;
@@ -1025,7 +1019,6 @@ function update() {
 
   if (player.invincibleTimer > 0) player.invincibleTimer--;
 
-  // 3. 障礙物更新與碰撞（支援護盾免疫三次傷害）
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
     obs.x -= currentSpeed + (obs.speedBonus || 0);
@@ -1039,7 +1032,6 @@ function update() {
 
     if (player.invincibleTimer === 0 && checkCollision(player, obs)) {
       if (player.shieldCharges > 0 && player.shieldTimer > 0) {
-        // 護盾抵擋本次傷害！
         player.shieldCharges--;
         if (player.shieldCharges <= 0) {
           player.shieldTimer = 0;
@@ -1063,7 +1055,6 @@ function update() {
     if (obs.x + obs.w < -150) obstacles.splice(i, 1);
   }
 
-  // 4. 金幣與技能球更新
   const pCenterX = player.x + player.w / 2;
   const pCenterY = player.y + player.h / 2;
 
@@ -1097,7 +1088,6 @@ function update() {
     if (item.x < -60) collectibles.splice(i, 1);
   }
 
-  // 5. 粒子更新
   for (let i = particles.length - 1; i >= 0; i--) {
     const pt = particles[i];
     pt.x += pt.vx;
@@ -1113,7 +1103,7 @@ function update() {
 }
 
 // ==========================================
-// 7. 渲染系統（含水藍色三層能量護盾視覺特效）
+// 7. 渲染系統
 // ==========================================
 function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
   ctx.save();
@@ -1227,7 +1217,6 @@ function drawStickman() {
   const pCenterX = player.x + player.w / 2;
   const pCenterY = player.y + player.h / 2;
 
-  // 磁鐵光環
   if (player.magnetTimer > 0) {
     ctx.save();
     ctx.strokeStyle = 'rgba(250, 204, 21, 0.35)';
@@ -1247,7 +1236,6 @@ function drawStickman() {
     renderStickmanPose(player, '#ffffff', '#94a3b8', 1);
   }
 
-  // 護盾能量罩（根據剩餘免疫次數顯示對應數量的環繞護盾光球）
   if (player.shieldCharges > 0 && player.shieldTimer > 0) {
     ctx.save();
     const shieldR = 32;
@@ -1259,7 +1247,6 @@ function drawStickman() {
     ctx.fill();
     ctx.stroke();
 
-    // 繪製剩餘護盾層數的環繞能量點
     for (let c = 0; c < player.shieldCharges; c++) {
       const ang = frameCount * 0.08 + (c * Math.PI * 2) / player.shieldCharges;
       const orbX = pCenterX + Math.cos(ang) * shieldR;
@@ -1710,6 +1697,9 @@ function gameLoop() {
 }
 
 function startGame() {
+  if (document.activeElement) {
+    document.activeElement.blur();
+  }
   initWorld();
   isPlaying = true;
   overlay.style.display = 'none';
@@ -1746,27 +1736,50 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-btnJump.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+let lastJumpPressTime = 0;
+function triggerJumpInput(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const now = performance.now();
+  if (now - lastJumpPressTime < 45) return;
+  lastJumpPressTime = now;
   btnJump.classList.add('active');
+  btnJump.blur();
   doJump();
-});
+}
+
+btnJump.addEventListener('pointerdown', triggerJumpInput);
+btnJump.addEventListener('touchstart', triggerJumpInput, { passive: false });
 btnJump.addEventListener('pointerup', () => btnJump.classList.remove('active'));
+btnJump.addEventListener('touchend', () => btnJump.classList.remove('active'));
 btnJump.addEventListener('pointerleave', () => btnJump.classList.remove('active'));
 
-btnSlide.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+let lastSlidePressTime = 0;
+function triggerSlideInput(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const now = performance.now();
+  if (now - lastSlidePressTime < 45) return;
+  lastSlidePressTime = now;
   btnSlide.classList.add('active');
+  btnSlide.blur();
   handleDownPress();
-});
-btnSlide.addEventListener('pointerup', () => {
+}
+
+function releaseSlideInput() {
   btnSlide.classList.remove('active');
   handleDownRelease();
-});
-btnSlide.addEventListener('pointerleave', () => {
-  btnSlide.classList.remove('active');
-  handleDownRelease();
-});
+}
+
+btnSlide.addEventListener('pointerdown', triggerSlideInput);
+btnSlide.addEventListener('touchstart', triggerSlideInput, { passive: false });
+btnSlide.addEventListener('pointerup', releaseSlideInput);
+btnSlide.addEventListener('touchend', releaseSlideInput);
+btnSlide.addEventListener('pointerleave', releaseSlideInput);
 
 initWorld();
 draw();
