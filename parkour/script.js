@@ -16,7 +16,7 @@ const btnJump = document.getElementById('btn-jump');
 const btnSlide = document.getElementById('btn-slide');
 
 // ==========================================
-// 1. 七大關卡視覺與色彩設定（支援平滑 RGB 漸變過渡）
+// 1. 七大關卡視覺與色彩設定（含高對比障礙物亮邊色）
 // ==========================================
 const THEMES = [
   {
@@ -28,6 +28,7 @@ const THEMES = [
     bgNear: [6, 78, 59],
     groundFill: [41, 29, 24],
     groundTop: [34, 197, 94],
+    obsRim: 'rgba(134, 239, 172, 0.72)',
     ambient: 'firefly'
   },
   {
@@ -39,6 +40,7 @@ const THEMES = [
     bgNear: [21, 128, 61],
     groundFill: [68, 64, 60],
     groundTop: [132, 204, 22],
+    obsRim: 'rgba(254, 240, 138, 0.78)',
     ambient: 'dandelion'
   },
   {
@@ -50,6 +52,7 @@ const THEMES = [
     bgNear: [68, 64, 60],
     groundFill: [41, 37, 36],
     groundTop: [217, 119, 6],
+    obsRim: 'rgba(253, 224, 71, 0.88)',
     ambient: 'leaves'
   },
   {
@@ -61,6 +64,7 @@ const THEMES = [
     bgNear: [71, 85, 105],
     groundFill: [51, 65, 85],
     groundTop: [226, 232, 240],
+    obsRim: 'rgba(125, 211, 252, 0.85)',
     ambient: 'mist'
   },
   {
@@ -72,6 +76,7 @@ const THEMES = [
     bgNear: [69, 10, 10],
     groundFill: [28, 25, 23],
     groundTop: [249, 115, 22],
+    obsRim: 'rgba(253, 186, 116, 0.88)',
     ambient: 'ember'
   },
   {
@@ -83,6 +88,7 @@ const THEMES = [
     bgNear: [15, 23, 42],
     groundFill: [15, 23, 42],
     groundTop: [56, 189, 248],
+    obsRim: 'rgba(56, 189, 248, 0.9)',
     ambient: 'rain'
   },
   {
@@ -94,6 +100,7 @@ const THEMES = [
     bgNear: [88, 28, 135],
     groundFill: [59, 7, 100],
     groundTop: [244, 114, 182],
+    obsRim: 'rgba(249, 168, 212, 0.88)',
     ambient: 'star'
   }
 ];
@@ -107,7 +114,7 @@ function lerpColor(c1, c2, t) {
 }
 
 // ==========================================
-// 2. 遊戲全域狀態與拉近鏡頭參數 (640x360)
+// 2. 遊戲全域狀態與鏡頭空間參數 (640x360)
 // ==========================================
 let isPlaying = false;
 let animationId;
@@ -123,16 +130,17 @@ let activeThemeIdx = 0;
 let prevThemeIdx = 0;
 let themeTransition = 1;
 
-const GROUND_Y = 304;
+// 地面與三層浮板整體下移 12px，留出頂部乾淨視野避免撞進 UI 膠囊
+const GROUND_Y = 316;
 const GRAVITY = 0.62;
 const FAST_FALL_SPEED = 23;
 const JUMP_FORCE = -11.6;
 const DOUBLE_JUMP_FORCE = -10.6;
 
 // 三層疊疊樂浮板標準高度
-const LAYER_1_Y = GROUND_Y - 68;   // 236
-const LAYER_2_Y = GROUND_Y - 134;  // 170
-const LAYER_3_Y = GROUND_Y - 198;  // 106
+const LAYER_1_Y = GROUND_Y - 66;   // 250
+const LAYER_2_Y = GROUND_Y - 130;  // 186
+const LAYER_3_Y = GROUND_Y - 192;  // 124
 
 const player = {
   x: 96,
@@ -168,12 +176,25 @@ let floatPads = [];
 let obstacles = [];
 let collectibles = [];
 let particles = [];
+let floatingTexts = [];
 let bgClouds = [];
 let bgFarItems = [];
 let bgNearItems = [];
 let groundProps = [];
 let ambientParticles = [];
 let worldCursorX = 0;
+
+function spawnFloatingText(x, y, text, color = '#ffffff') {
+  floatingTexts.push({
+    x,
+    y,
+    text,
+    color,
+    vy: -1.4,
+    life: 44,
+    maxLife: 44
+  });
+}
 
 function initBackground() {
   bgClouds = [];
@@ -220,6 +241,7 @@ function initWorld() {
   obstacles = [];
   collectibles = [];
   particles = [];
+  floatingTexts = [];
 
   distance = 0;
   coins = 0;
@@ -258,7 +280,7 @@ function initWorld() {
 
   initBackground();
 
-  addPlatformSegment(0, 720, 0);
+  addPlatformSegment(0, 720, 0, false);
   addCoinLine(210, GROUND_Y - 18, 4, 28, 'small');
   addSkillOrb(350, GROUND_Y - 26, 'shield');
   addFloatPad(430, LAYER_1_Y, 150, 0);
@@ -271,10 +293,10 @@ function initWorld() {
 }
 
 // ==========================================
-// 3. 障礙物置中對齊拋物線與物件生成輔助函式
+// 3. 獎勵防重疊保護與物件生成輔助函式
 // ==========================================
-function addPlatformSegment(x, w, themeIdx) {
-  platforms.push({ x, w, y: GROUND_Y, themeIdx });
+function addPlatformSegment(x, w, themeIdx, hasAbyssRight = false) {
+  platforms.push({ x, w, y: GROUND_Y, themeIdx, hasAbyssRight });
   for (let px = x + 18; px < x + w - 18; px += 34 + Math.random() * 40) {
     groundProps.push({
       x: px,
@@ -289,15 +311,37 @@ function addFloatPad(x, y, w, themeIdx) {
   floatPads.push({ x, y, w, h: 11, themeIdx });
 }
 
+// 自動避開同座標的障礙物，防止金幣或技能球「長在尖刺陷阱裡面」
+function resolveSafeCollectibleY(x, y, r) {
+  let safeY = y;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let hit = false;
+    for (const obs of obstacles) {
+      if (
+        x + r + 14 > obs.x &&
+        x - r - 14 < obs.x + obs.w &&
+        safeY + r + 14 > obs.y &&
+        safeY - r - 14 < obs.y + obs.h
+      ) {
+        safeY = obs.y - r - 24;
+        hit = true;
+      }
+    }
+    if (!hit) break;
+  }
+  return Math.max(46, safeY);
+}
+
 function addCoin(x, y, type = 'small') {
   const value = type === 'large' ? 3 : type === 'medium' ? 2 : 1;
   const radius = type === 'large' ? 10.5 : type === 'medium' ? 8.2 : 6.2;
+  const safeY = resolveSafeCollectibleY(x, y, radius);
   collectibles.push({
     kind: 'coin',
     coinType: type,
     value,
     x,
-    y,
+    y: safeY,
     r: radius,
     phase: Math.random() * Math.PI * 2
   });
@@ -326,12 +370,14 @@ function addCenteredJumpArc(centerX, surfaceY, jumpForce, speed, count = 5, type
 }
 
 function addSkillOrb(x, y, skill) {
+  const r = 13.5;
+  const safeY = resolveSafeCollectibleY(x, y, r);
   collectibles.push({
     kind: 'skill',
     skill,
     x,
-    y,
-    r: 13.5,
+    y: safeY,
+    r,
     phase: Math.random() * Math.PI * 2
   });
 }
@@ -427,7 +473,7 @@ function addObstacle(themeId, categoryIdx, variant, x, customSurfaceY = GROUND_Y
 }
 
 // ==========================================
-// 4. 模板庫（含強制二段跳超高巨障 + 高頻技能球）
+// 4. 模板庫（先放障礙物再放獎勵，徹底消除重疊）
 // ==========================================
 function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
   const S = (val) => Math.round(val * speedRatio);
@@ -442,7 +488,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
   switch (tplIndex) {
     case 0: {
       const totalW = S(460);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs = addObstacle(themeId, 0, 0, startX + S(230));
       addCenteredJumpArc(obs.x + obs.w / 2, GROUND_Y, JUMP_FORCE, effSpeed, 5, 'small');
       maybeSpawnSkill(startX + S(390), GROUND_Y - 26);
@@ -450,7 +496,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 1: {
       const totalW = S(460);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs = addObstacle(themeId, 3, 0, startX + S(230));
       const coinSpacing = S(24);
       const coinCount = 5;
@@ -460,7 +506,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 2: {
       const totalW = S(540);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(100), LAYER_1_Y, S(150), themeIdx);
       addCoinLine(startX + S(120), LAYER_1_Y - 16, 4, S(32), 'small');
       addFloatPad(startX + S(280), LAYER_2_Y, S(160), themeIdx);
@@ -472,16 +518,16 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       const p1W = S(180);
       const gapW = S(120);
       const p2W = S(220);
-      addPlatformSegment(startX, p1W, themeIdx);
+      addPlatformSegment(startX, p1W, themeIdx, true); // 標記右側有深淵斷崖
       const gapCenterX = startX + p1W + gapW / 2;
       addCenteredJumpArc(gapCenterX, GROUND_Y, JUMP_FORCE, effSpeed, 5, 'small');
-      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx);
+      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx, false);
       maybeSpawnSkill(startX + p1W + gapW + S(110), GROUND_Y - 26);
       return p1W + gapW + p2W;
     }
     case 4: {
       const totalW = S(620);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs1 = addObstacle(themeId, 1, 0, startX + S(180));
       addCenteredJumpArc(obs1.x + obs1.w / 2, GROUND_Y, JUMP_FORCE, effSpeed, 4, 'small');
       const obs2 = addObstacle(themeId, 2, 0, startX + S(420));
@@ -490,16 +536,16 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 5: {
       const totalW = S(520);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(90), LAYER_1_Y, S(165), themeIdx);
       addCoinLine(startX + S(115), LAYER_1_Y - 16, 3, S(36), 'small');
       addObstacle(themeId, 5, 0, startX + S(330));
-      addSkillOrb(startX + S(395), GROUND_Y - 26, randomSkillType());
+      addSkillOrb(startX + S(420), GROUND_Y - 26, randomSkillType());
       return totalW;
     }
     case 6: {
       const totalW = S(500);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(140), LAYER_1_Y, S(200), themeIdx);
       addCoinLine(startX + S(165), LAYER_1_Y - 16, 4, S(38), 'medium');
       const obs = addObstacle(themeId, 3, 0, startX + S(220));
@@ -508,7 +554,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 7: {
       const totalW = S(660);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(80), LAYER_1_Y, S(135), themeIdx);
       addCoinLine(startX + S(98), LAYER_1_Y - 16, 3, S(34), 'small');
 
@@ -522,7 +568,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 8: {
       const totalW = S(600);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const airX = startX + S(190);
       addObstacle(themeId, 3, 0, airX);
       addObstacle(themeId, 3, 1, airX + 15);
@@ -535,7 +581,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 9: {
       const totalW = S(580);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs = addObstacle(themeId, 0, 3, startX + S(275));
       addCenteredJumpArc(obs.x + obs.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 5, 'medium');
       addCoin(obs.x + obs.w / 2, GROUND_Y - 155, 'large');
@@ -544,10 +590,10 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 10: {
       const totalW = S(640);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(100), LAYER_1_Y, S(350), themeIdx);
-      addCoinLine(startX + S(125), LAYER_1_Y - 16, 3, S(32), 'small');
       addObstacle(themeId, 1, 0, startX + S(300), LAYER_1_Y);
+      addCoinLine(startX + S(125), LAYER_1_Y - 16, 3, S(32), 'small');
       addCoinLine(startX + S(295), GROUND_Y - 16, 4, S(34), 'large');
       return totalW;
     }
@@ -555,17 +601,17 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       const p1W = S(160);
       const gapTotal = S(320);
       const p2W = S(190);
-      addPlatformSegment(startX, p1W, themeIdx);
+      addPlatformSegment(startX, p1W, themeIdx, true);
       addFloatPad(startX + p1W + S(45), LAYER_1_Y + 15, S(100), themeIdx);
       addCoin(startX + p1W + S(95), LAYER_1_Y - 6, 'medium');
       addFloatPad(startX + p1W + S(185), LAYER_1_Y - 15, S(100), themeIdx);
       addSkillOrb(startX + p1W + S(235), LAYER_1_Y - 38, randomSkillType());
-      addPlatformSegment(startX + p1W + gapTotal, p2W, themeIdx);
+      addPlatformSegment(startX + p1W + gapTotal, p2W, themeIdx, false);
       return p1W + gapTotal + p2W;
     }
     case 12: {
       const totalW = S(620);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs1 = addObstacle(themeId, 2, 0, startX + S(170));
       addCenteredJumpArc(obs1.x + obs1.w / 2, GROUND_Y, JUMP_FORCE, effSpeed, 3, 'medium');
       const obs2 = addObstacle(themeId, 4, 1, startX + S(370));
@@ -574,7 +620,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 13: {
       const totalW = S(640);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addObstacle(themeId, 2, 1, startX + S(200));
       addObstacle(themeId, 2, 1, startX + S(295));
       addObstacle(themeId, 2, 1, startX + S(390));
@@ -587,14 +633,14 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 14: {
       const totalW = S(740);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(90), LAYER_1_Y, S(125), themeIdx);
       addFloatPad(startX + S(235), LAYER_2_Y, S(135), themeIdx);
       addFloatPad(startX + S(390), LAYER_3_Y, S(165), themeIdx);
 
-      addCoinLine(startX + S(410), LAYER_3_Y - 16, 3, S(36), 'large');
       addObstacle(themeId, 3, 0, startX + S(500));
       addObstacle(themeId, 3, 1, startX + S(515));
+      addCoinLine(startX + S(410), LAYER_3_Y - 16, 3, S(36), 'large');
       addCoinLine(startX + S(490), GROUND_Y - 13, 4, S(25), 'large');
       return totalW;
     }
@@ -602,7 +648,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       const p1W = S(150);
       const gapW = S(450);
       const p2W = S(170);
-      addPlatformSegment(startX, p1W, themeIdx);
+      addPlatformSegment(startX, p1W, themeIdx, true);
 
       addFloatPad(startX + p1W + S(45), LAYER_1_Y + 10, S(95), themeIdx);
       addCoin(startX + p1W + S(92), LAYER_1_Y - 12, 'large');
@@ -613,12 +659,12 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       addFloatPad(startX + p1W + S(325), LAYER_1_Y - 10, S(95), themeIdx);
       addCoin(startX + p1W + S(372), LAYER_1_Y - 32, 'large');
 
-      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx);
+      addPlatformSegment(startX + p1W + gapW, p2W, themeIdx, false);
       return p1W + gapW + p2W;
     }
     case 16: {
       const totalW = S(820);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs1 = addObstacle(themeId, 0, 3, startX + S(190));
       addCenteredJumpArc(obs1.x + obs1.w / 2, GROUND_Y, JUMP_FORCE * 1.55, effSpeed, 3, 'large');
 
@@ -631,7 +677,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 17: {
       const totalW = S(680);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       const obs = addObstacle(themeId, 2, 1, startX + S(270));
       addObstacle(themeId, 4, 2, startX + S(370));
       addCenteredJumpArc(obs.x + obs.w / 2, GROUND_Y, JUMP_FORCE, effSpeed, 5, 'large');
@@ -640,7 +686,7 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
     }
     case 18: {
       const totalW = S(740);
-      addPlatformSegment(startX, totalW, themeIdx);
+      addPlatformSegment(startX, totalW, themeIdx, false);
       addFloatPad(startX + S(100), LAYER_1_Y, S(250), themeIdx);
       addFloatPad(startX + S(270), LAYER_2_Y, S(270), themeIdx);
 
@@ -656,11 +702,11 @@ function buildTemplate(themeId, themeIdx, tplIndex, startX, speedRatio) {
       const p1W = S(160);
       const gapW = S(130);
       const p2W = S(580);
-      addPlatformSegment(startX, p1W, themeIdx);
+      addPlatformSegment(startX, p1W, themeIdx, true);
       addCenteredJumpArc(startX + p1W + gapW / 2, GROUND_Y, JUMP_FORCE, effSpeed, 4, 'medium');
 
       const p2Start = startX + p1W + gapW;
-      addPlatformSegment(p2Start, p2W, themeIdx);
+      addPlatformSegment(p2Start, p2W, themeIdx, false);
       addFloatPad(p2Start + S(65), LAYER_1_Y, S(125), themeIdx);
       addObstacle(themeId, 3, 0, p2Start + S(240));
       addObstacle(themeId, 3, 1, p2Start + S(255));
@@ -704,7 +750,7 @@ function appendNextTemplate() {
 }
 
 // ==========================================
-// 5. 玩家動作與技能觸發（含同幀防連扣跳躍次數與護盾免疫）
+// 5. 玩家動作與技能觸發（含同幀防連扣跳躍次數與護盾震碎障礙）
 // ==========================================
 function doJump() {
   if (!isPlaying) return;
@@ -779,19 +825,26 @@ function stopSlide() {
 }
 
 function triggerSkill(skill) {
+  const px = player.x + player.w / 2;
+  const py = player.y - 12;
+
   if (skill === 'magnet') {
     player.magnetTimer = 480;
-    spawnParticles(player.x + 15, player.y + 20, '#facc15', 16);
+    spawnParticles(px, py + 24, '#facc15', 16);
+    spawnFloatingText(px, py, '🧲 磁鐵啟動!', '#facc15');
   } else if (skill === 'heal') {
     player.hp = Math.min(player.maxHp, player.hp + 30);
-    spawnParticles(player.x + 15, player.y + 20, '#4ade80', 18);
+    spawnParticles(px, py + 24, '#4ade80', 18);
+    spawnFloatingText(px, py, '💖 體力 +30', '#4ade80');
   } else if (skill === 'triple') {
     player.tripleJumpTimer = 600;
-    spawnParticles(player.x + 15, player.y + 20, '#c084fc', 18);
+    spawnParticles(px, py + 24, '#c084fc', 18);
+    spawnFloatingText(px, py, '🪽 三段跳啟動!', '#e879f9');
   } else if (skill === 'shield') {
     player.shieldCharges = 3;
     player.shieldTimer = 720;
-    spawnParticles(player.x + 15, player.y + 20, '#38bdf8', 20);
+    spawnParticles(px, py + 24, '#38bdf8', 20);
+    spawnFloatingText(px, py, '🛡️ 三層護盾!', '#38bdf8');
   } else if (skill === 'bomb') {
     screenShake = 14;
     for (const obs of obstacles) {
@@ -800,6 +853,7 @@ function triggerSkill(skill) {
       }
     }
     obstacles = obstacles.filter(obs => obs.x >= canvas.width + 60);
+    spawnFloatingText(px, py, '💣 全屏清障!', '#fb923c');
   }
 }
 
@@ -932,6 +986,13 @@ function update() {
   }
 
   player.y += player.vy;
+
+  // 頂部柔和天花板緩衝，防止衝進 UI 狀態列
+  if (player.y < 36) {
+    player.y = 36;
+    if (player.vy < 0) player.vy = 0;
+  }
+
   const wasGrounded = player.isGrounded;
   player.isGrounded = false;
   player.standingPad = null;
@@ -1019,6 +1080,7 @@ function update() {
 
   if (player.invincibleTimer > 0) player.invincibleTimer--;
 
+  // 障礙物更新與碰撞（護盾格擋時直接震碎該障礙物！）
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
     obs.x -= currentSpeed + (obs.speedBonus || 0);
@@ -1036,14 +1098,18 @@ function update() {
         if (player.shieldCharges <= 0) {
           player.shieldTimer = 0;
         }
-        player.invincibleTimer = 42;
-        screenShake = 6;
-        spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#38bdf8', 22);
+        player.invincibleTimer = 36;
+        screenShake = 8;
+        spawnParticles(obs.x + obs.w / 2, obs.y + obs.h / 2, '#38bdf8', 24);
+        spawnFloatingText(player.x + player.w / 2, player.y - 16, '🛡️ 格擋震碎!', '#38bdf8');
+        obstacles.splice(i, 1); // 直接震碎消失！
+        continue;
       } else {
         player.hp = Math.max(0, player.hp - obs.damage);
         player.invincibleTimer = 50;
         screenShake = 9;
         spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#ef4444', 16);
+        spawnFloatingText(player.x + player.w / 2, player.y - 16, `-${obs.damage}`, '#f87171');
 
         if (player.hp <= 0) {
           gameOver('體力耗盡倒下了！');
@@ -1078,6 +1144,9 @@ function update() {
         coins += item.value;
         coinEl.textContent = coins;
         spawnParticles(item.x, item.y, '#facc15', 6);
+        if (item.value >= 2) {
+          spawnFloatingText(item.x, item.y - 8, `+${item.value}`, '#fde047');
+        }
       } else if (item.kind === 'skill') {
         triggerSkill(item.skill);
       }
@@ -1096,6 +1165,13 @@ function update() {
     if (pt.life <= 0) particles.splice(i, 1);
   }
 
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.vy;
+    ft.life--;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+
   worldCursorX -= currentSpeed;
   while (worldCursorX < canvas.width + 750) {
     appendNextTemplate();
@@ -1103,7 +1179,7 @@ function update() {
 }
 
 // ==========================================
-// 7. 渲染系統
+// 7. 渲染系統（含高對比發光邊框與深淵斷崖警示）
 // ==========================================
 function renderStickmanPose(state, colorMain, colorSub, alpha = 1) {
   ctx.save();
@@ -1265,6 +1341,11 @@ function drawObstacle(obs) {
   const cx = obs.x + obs.w / 2;
   const cy = obs.y + obs.h / 2;
   const t = obs.visual;
+  const rimColor = THEMES[activeThemeIdx].obsRim;
+
+  // 高對比外發光輪廓，避免古城/火山障礙物融進背景色
+  ctx.shadowColor = rimColor;
+  ctx.shadowBlur = 7;
 
   if (t === 'f_tree') {
     const trunkW = obs.w * 0.36;
@@ -1308,7 +1389,7 @@ function drawObstacle(obs) {
     ctx.fill();
 
   } else if (t === 'f_trap' || t === 'a_spikes') {
-    ctx.fillStyle = t === 'f_trap' ? '#475569' : '#d97706';
+    ctx.fillStyle = t === 'f_trap' ? '#64748b' : '#f59e0b';
     const teeth = 4;
     const step = obs.w / teeth;
     for (let i = 0; i < teeth; i++) {
@@ -1341,14 +1422,14 @@ function drawObstacle(obs) {
 
   } else if (t === 'f_vine' || t === 'a_bell' || t === 'm_icicle') {
     const sway = obs.sway ? Math.sin(frameCount * 0.08 + obs.phase) * 9 : 0;
-    ctx.strokeStyle = t === 'f_vine' ? '#16a34a' : t === 'a_bell' ? '#78350f' : '#bae6fd';
+    ctx.strokeStyle = t === 'f_vine' ? '#22c55e' : t === 'a_bell' ? '#fbbf24' : '#bae6fd';
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(cx, 0);
     ctx.lineTo(cx + sway, obs.y + obs.h - 12);
     ctx.stroke();
 
-    ctx.fillStyle = t === 'f_vine' ? '#9333ea' : t === 'a_bell' ? '#b45309' : '#38bdf8';
+    ctx.fillStyle = t === 'f_vine' ? '#a855f7' : t === 'a_bell' ? '#f59e0b' : '#38bdf8';
     ctx.beginPath();
     ctx.arc(cx + sway, obs.y + obs.h - 10, 11, 0, Math.PI * 2);
     ctx.fill();
@@ -1357,7 +1438,7 @@ function drawObstacle(obs) {
     ctx.translate(cx, cy);
     ctx.rotate(-frameCount * 0.16);
     const r = obs.w / 2;
-    ctx.fillStyle = t === 'f_log' ? '#78350f' : t === 'a_wheel' ? '#a8a29e' : t === 'm_boulder' ? '#64748b' : t === 'v_lavaball' ? '#ea580c' : '#c084fc';
+    ctx.fillStyle = t === 'f_log' ? '#92400e' : t === 'a_wheel' ? '#d6d3d1' : t === 'm_boulder' ? '#64748b' : t === 'v_lavaball' ? '#ea580c' : '#c084fc';
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
@@ -1381,11 +1462,11 @@ function drawObstacle(obs) {
     ctx.fillRect(obs.x + obs.w - 12, obs.y, 7, obs.h);
 
   } else if (t === 's_hydrant' || t === 's_sign' || t === 'a_pillar' || t === 'a_statue' || t === 'v_totem' || t === 'd_chess') {
-    ctx.fillStyle = t === 's_hydrant' ? '#ef4444' : t === 's_sign' ? '#3b82f6' : t === 'a_pillar' ? '#d6d3d1' : t === 'a_statue' ? '#ca8a04' : t === 'v_totem' ? '#44403c' : '#e879f9';
+    ctx.fillStyle = t === 's_hydrant' ? '#ef4444' : t === 's_sign' ? '#3b82f6' : t === 'a_pillar' ? '#e7e5e4' : t === 'a_statue' ? '#eab308' : t === 'v_totem' ? '#57534e' : '#e879f9';
     ctx.beginPath();
     ctx.roundRect(obs.x + 4, obs.y, obs.w - 8, obs.h, 5);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(obs.x + 8, obs.y + 8, obs.w - 16, 6);
 
   } else if (t === 's_kite' || t === 's_wire' || t === 'c_drone' || t === 'd_eye') {
@@ -1410,7 +1491,7 @@ function drawObstacle(obs) {
     ctx.fill();
 
   } else if (t === 'a_arrow' || t === 'c_missile') {
-    ctx.fillStyle = t === 'a_arrow' ? '#f59e0b' : '#e2e8f0';
+    ctx.fillStyle = t === 'a_arrow' ? '#fbbf24' : '#e2e8f0';
     ctx.fillRect(obs.x + 10, cy - 4, obs.w - 14, 8);
     ctx.fillStyle = '#ef4444';
     ctx.beginPath();
@@ -1420,7 +1501,7 @@ function drawObstacle(obs) {
     ctx.fill();
 
   } else if (t === 'm_rock' || t === 'm_ice' || t === 'v_obsidian' || t === 'd_crystal' || t === 'd_rift') {
-    ctx.fillStyle = t === 'm_rock' ? '#64748b' : t === 'm_ice' ? '#7dd3fc' : t === 'v_obsidian' ? '#1c1917' : t === 'd_crystal' ? '#e879f9' : '#4c1d95';
+    ctx.fillStyle = t === 'm_rock' ? '#64748b' : t === 'm_ice' ? '#7dd3fc' : t === 'v_obsidian' ? '#292524' : t === 'd_crystal' ? '#e879f9' : '#6b21a8';
     ctx.beginPath();
     ctx.moveTo(obs.x, obs.y + obs.h);
     ctx.lineTo(cx, obs.y);
@@ -1619,12 +1700,40 @@ function draw() {
     }
   }
 
+  let upcomingAbyss = false;
   for (const p of platforms) {
     const pTheme = THEMES[p.themeIdx ?? activeThemeIdx];
     ctx.fillStyle = `rgb(${pTheme.groundFill.join(',')})`;
     ctx.fillRect(p.x, p.y, p.w, canvas.height - p.y);
     ctx.fillStyle = `rgb(${pTheme.groundTop.join(',')})`;
     ctx.fillRect(p.x, p.y, p.w, 6);
+
+    // 若右側緊接深淵，在斷崖邊緣畫上亮黃紅警戒條
+    if (p.hasAbyssRight) {
+      const edgeX = p.x + p.w;
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(edgeX - 10, p.y, 10, 6);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(edgeX - 5, p.y - 14, 3, 14);
+      if (edgeX > player.x && edgeX < canvas.width + 180) {
+        upcomingAbyss = true;
+      }
+    }
+  }
+
+  // 右側螢幕邊緣「⚠️ 斷崖」預警標記
+  if (upcomingAbyss && Math.floor(frameCount / 6) % 2 === 0) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(canvas.width - 78, GROUND_Y - 42, 70, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚠️ 斷崖', canvas.width - 43, GROUND_Y - 30);
+    ctx.restore();
   }
 
   for (const gp of groundProps) {
@@ -1666,6 +1775,7 @@ function draw() {
   drawCollectibles();
   drawStickman();
 
+  // 血量條
   const barW = 44;
   const barH = 6;
   const barX = player.x + (player.w - barW) / 2;
@@ -1678,11 +1788,26 @@ function draw() {
   ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : hpRatio > 0.25 ? '#eab308' : '#ef4444';
   ctx.fillRect(barX, barY, barW * hpRatio, barH);
 
+  // 粒子渲染
   for (const pt of particles) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
     ctx.fillStyle = pt.color;
     ctx.fillRect(pt.x, pt.y, 4, 4);
+    ctx.restore();
+  }
+
+  // 浮動戰鬥與得分文字
+  for (const ft of floatingTexts) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (ft.life / ft.maxLife) * 1.4);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.85)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(ft.text, ft.x, ft.y);
+    ctx.fillStyle = ft.color;
+    ctx.fillText(ft.text, ft.x, ft.y);
     ctx.restore();
   }
 
