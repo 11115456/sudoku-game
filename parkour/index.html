@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>極限跑酷大冒險</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <div class="game-wrapper">
@@ -12,20 +12,25 @@
       <a href="../index.html" class="back-btn">⬅ 返回大廳</a>
       <div class="stats">
         <span id="theme-badge" class="theme-badge">🌲 迷霧森林</span>
-        <span>距離: <strong id="score">0</strong> m</span>
+        <span>距離: <strong id="score">0</strong>m</span>
+        <span>🪙 <strong id="coin-display">0</strong></span>
         <span>速度: <strong id="speed-display">1.0</strong>x</span>
       </div>
     </div>
 
+    <!-- 鏡頭拉近為 640x360 比例 -->
     <div class="canvas-container">
-      <canvas id="gameCanvas" width="800" height="420"></canvas>
+      <canvas id="gameCanvas" width="640" height="360"></canvas>
+
+      <!-- 技能增益即時提示列 -->
+      <div id="buff-bar" class="buff-bar"></div>
 
       <!-- 開始 / 結束 覆蓋層 -->
       <div id="overlay" class="overlay">
         <h2 id="overlay-title">🥷 極限跑酷大冒險</h2>
         <p id="overlay-desc">
-          電腦：[W / ↑ / 空白鍵] 跳躍(可二段跳) ｜ [S / ↓] 空中速降 / 貼地滑行<br>
-          平板/手機：點擊畫面下方左右按鈕操作（每 400m 切換關卡主題）
+          電腦：[W / ↑ / 空白鍵] 跳躍（支持二段跳/技能三段跳）｜ [S / ↓] 空中速降 / 貼地滑行<br>
+          平板/手機：點擊下方左右按鈕操作（每 1000m 切換關卡，15000m 進入終極夢境）
         </p>
         <p id="final-score" class="final-score" style="display: none;"></p>
         <button id="start-btn" class="start-btn">開始奔跑</button>
@@ -35,10 +40,10 @@
     <!-- 手機/iPad 雙手觸控區 -->
     <div class="touch-controls">
       <button id="btn-slide" class="ctrl-btn slide-btn">⬇️ 速降 / 滑行 (按住)</button>
-      <button id="btn-jump" class="ctrl-btn jump-btn">⬆️ 跳躍 / 二段跳</button>
+      <button id="btn-jump" class="ctrl-btn jump-btn">⬆️ 跳躍 / 連跳</button>
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=4"></script>
 </body>
 </html>
