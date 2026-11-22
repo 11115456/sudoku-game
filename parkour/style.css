@@ -122,6 +122,11 @@ canvas {
   color: #fef08a;
 }
 
+.buff-pill.shield {
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+
 .overlay {
   position: absolute;
   inset: 0;
