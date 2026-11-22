@@ -7,8 +7,8 @@
 
 body {
   margin: 0;
-  padding: 12px;
-  background: #0f172a;
+  padding: 10px;
+  background: #090d16;
   color: #f8fafc;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
@@ -23,7 +23,7 @@ body {
   max-width: 820px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .top-bar {
@@ -31,7 +31,7 @@ body {
   justify-content: space-between;
   align-items: center;
   background: #1e293b;
-  padding: 10px 16px;
+  padding: 8px 14px;
   border-radius: 12px;
   border: 1px solid #334155;
   flex-wrap: wrap;
@@ -42,21 +42,21 @@ body {
   color: #38bdf8;
   text-decoration: none;
   font-weight: bold;
-  font-size: 14px;
-  padding: 6px 10px;
-  background: rgba(56, 189, 248, 0.1);
+  font-size: 13px;
+  padding: 5px 10px;
+  background: rgba(56, 189, 248, 0.12);
   border-radius: 8px;
 }
 
 .stats {
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 15px;
+  gap: 14px;
+  font-size: 14px;
 }
 
 .theme-badge {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   padding: 4px 10px;
   border-radius: 20px;
   font-weight: bold;
@@ -65,18 +65,22 @@ body {
 
 .stats strong {
   color: #fb923c;
-  font-size: 17px;
+  font-size: 16px;
+}
+
+#coin-display {
+  color: #facc15;
 }
 
 .canvas-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 800 / 420;
+  aspect-ratio: 640 / 360;
   background: #1e293b;
   border-radius: 14px;
   overflow: hidden;
   border: 2px solid #334155;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
 }
 
 canvas {
@@ -85,10 +89,43 @@ canvas {
   display: block;
 }
 
+.buff-bar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.buff-pill {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1.5px solid #38bdf8;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.buff-pill.triple {
+  border-color: #a855f7;
+  color: #e9d5ff;
+}
+
+.buff-pill.magnet {
+  border-color: #facc15;
+  color: #fef08a;
+}
+
 .overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(9, 13, 22, 0.86);
   backdrop-filter: blur(4px);
   display: flex;
   flex-direction: column;
@@ -99,20 +136,20 @@ canvas {
 }
 
 .overlay h2 {
-  font-size: 28px;
-  margin: 0 0 12px 0;
+  font-size: 26px;
+  margin: 0 0 10px 0;
   color: #fb923c;
 }
 
 .overlay p {
-  font-size: 14px;
+  font-size: 13px;
   color: #cbd5e1;
   line-height: 1.6;
-  margin: 0 0 20px 0;
+  margin: 0 0 18px 0;
 }
 
 .final-score {
-  font-size: 20px !important;
+  font-size: 18px !important;
   font-weight: bold;
   color: #38bdf8 !important;
 }
@@ -121,13 +158,12 @@ canvas {
   background: linear-gradient(135deg, #f97316, #ea580c);
   color: white;
   border: none;
-  padding: 12px 32px;
-  font-size: 18px;
+  padding: 11px 30px;
+  font-size: 17px;
   font-weight: bold;
   border-radius: 10px;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
-  transition: transform 0.1s;
 }
 
 .start-btn:active {
@@ -137,14 +173,14 @@ canvas {
 .touch-controls {
   display: flex;
   gap: 12px;
-  height: 68px;
+  height: 64px;
 }
 
 .ctrl-btn {
   flex: 1;
   border: none;
   border-radius: 12px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: bold;
   color: white;
   cursor: pointer;
